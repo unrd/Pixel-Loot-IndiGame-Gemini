@@ -18,6 +18,7 @@ export interface Item {
   description: string;
   rarity: Rarity;
   type: ItemType; 
+  itemLevel: number; // New field for scaling
   isEquipped: boolean;
   damageBonus: number; 
   defenseBonus?: number; 

@@ -10,7 +10,7 @@ import { playClickSound, playDeathSound, playGoldSound, playUpgradeSound, playGa
 
 // Utility for ID generation
 const uid = () => Math.random().toString(36).substr(2, 9);
-const SAVE_KEY = 'pixel_loot_lord_save_v10'; 
+const SAVE_KEY = 'pixel_loot_lord_save_v11'; 
 const TUTORIAL_KEY = 'pixel_loot_lord_tutorial_completed_v2';
 
 const INITIAL_STATS: PlayerStats = {
@@ -61,7 +61,8 @@ export default function App() {
              ...item,
              type: item.type !== undefined ? item.type : ItemType.WEAPON,
              isEquipped: item.isEquipped !== undefined ? item.isEquipped : true, 
-             defenseBonus: item.defenseBonus || 0
+             defenseBonus: item.defenseBonus || 0,
+             itemLevel: item.itemLevel || 1 // Backwards compatibility
         }));
       } catch (e) {}
     }
@@ -75,24 +76,22 @@ export default function App() {
             const parsed = JSON.parse(saved);
             return parsed.costs || {
                 click: CLICK_UPGRADE_COST_BASE,
-                auto: AUTO_UPGRADE_COST_BASE,
-                gacha: GACHA_COST_BASE
+                auto: AUTO_UPGRADE_COST_BASE
             };
         } catch(e) {}
     }
     return {
         click: CLICK_UPGRADE_COST_BASE,
-        auto: AUTO_UPGRADE_COST_BASE,
-        gacha: GACHA_COST_BASE
+        auto: AUTO_UPGRADE_COST_BASE
     };
   });
 
   const [monster, setMonster] = useState<Monster>({
     name: "Слизень",
-    hp: 10,
-    maxHp: 10,
+    hp: 15,
+    maxHp: 15,
     level: 1,
-    goldReward: 2
+    goldReward: 3
   });
 
   const [buffs, setBuffs] = useState<Buffs>({
@@ -112,7 +111,6 @@ export default function App() {
   const [showPrestigeModal, setShowPrestigeModal] = useState(false);
   const [showAchievementsModal, setShowAchievementsModal] = useState(false);
   const [showShopModal, setShowShopModal] = useState(false);
-  const [showHelpModal, setShowHelpModal] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showStoryModal, setShowStoryModal] = useState(false);
   const [showBossIntro, setShowBossIntro] = useState(false);
@@ -156,6 +154,9 @@ export default function App() {
       }
       return [];
   });
+
+  // Dynamic Gacha Cost based on level to control economy
+  const gachaCost = Math.floor(GACHA_COST_BASE * Math.pow(1.05, stats.level));
 
   // --- Initialization Effects ---
 
@@ -342,10 +343,19 @@ export default function App() {
     } else {
         name = MONSTER_NAMES[Math.min(Math.floor(level / 5), MONSTER_NAMES.length - 1)];
     }
-    const hpMultiplier = isBoss ? 10 : 1; 
-    const hp = Math.floor(10 * Math.pow(1.15, level - 1) * hpMultiplier);
-    const goldMultiplier = isBoss ? 5 : 1;
-    const gold = Math.floor(2 * Math.pow(1.1, level - 1) * goldMultiplier);
+    
+    // Balanced HP and Gold Scaling
+    // HP scales faster than linear to require upgrades
+    // Gold scales slightly slower to require more grind
+    
+    const baseHp = 15;
+    const baseGold = 3;
+    
+    // 1.25^Level means HP doubles roughly every 3-4 levels
+    const hp = Math.floor(baseHp * Math.pow(1.25, level - 1) * (isBoss ? 10 : 1));
+    
+    // 1.20^Level means Gold doubles roughly every 4 levels
+    const gold = Math.floor(baseGold * Math.pow(1.20, level - 1) * (isBoss ? 5 : 1));
     
     setMonster({
       name, hp, maxHp: hp, level, goldReward: gold, isBoss, timeRemaining: isBoss ? 30 : undefined
@@ -390,7 +400,7 @@ export default function App() {
     for (let i = 0; i < amount; i++) {
         const roll = Math.random();
         if (roll < 0.5) {
-            const gold = Math.floor(500 * stats.level * (1 + Math.random()));
+            const gold = Math.floor(monster.goldReward * 20 * (1 + Math.random()));
             totalGold += gold;
             results.push(`${gold} Золота`);
         } else if (roll < 0.8) {
@@ -429,7 +439,7 @@ export default function App() {
       const roll = Math.random();
       let rewardText = "";
       if (roll < 0.5) {
-          const gold = Math.floor(500 * stats.level * (1 + Math.random()));
+          const gold = Math.floor(monster.goldReward * 20 * (1 + Math.random()));
           setStats(prev => ({ ...prev, gold: prev.gold + gold }));
           rewardText = `${gold} Золота`;
       } else if (roll < 0.8) {
@@ -556,17 +566,18 @@ export default function App() {
   };
 
   const buyUpgrade = (type: 'click' | 'auto') => {
+    // Smoother scaling for costs (1.15x instead of 1.5x)
     if (type === 'click') {
       if (stats.gold >= costs.click) {
         playUpgradeSound();
         setStats(prev => ({ ...prev, gold: prev.gold - costs.click, clickDamage: prev.clickDamage + 1 }));
-        setCosts(prev => ({ ...prev, click: Math.floor(prev.click * 1.5) }));
+        setCosts(prev => ({ ...prev, click: Math.floor(prev.click * 1.15) }));
       }
     } else {
       if (stats.gold >= costs.auto) {
         playUpgradeSound();
         setStats(prev => ({ ...prev, gold: prev.gold - costs.auto, autoDps: prev.autoDps + 1 }));
-        setCosts(prev => ({ ...prev, auto: Math.floor(prev.auto * 1.5) }));
+        setCosts(prev => ({ ...prev, auto: Math.floor(prev.auto * 1.15) }));
       }
     }
   };
@@ -652,12 +663,11 @@ export default function App() {
   };
 
   const calculateSellPrice = (item: Item) => {
-      let sellPrice = 10;
-      if (item.rarity === Rarity.RARE) sellPrice = 50;
-      if (item.rarity === Rarity.EPIC) sellPrice = 200;
-      if (item.rarity === Rarity.LEGENDARY) sellPrice = 1000;
-      sellPrice += Math.floor((item.damageBonus || 0) * 2);
-      return sellPrice;
+      let sellPrice = 10 * (item.itemLevel || 1);
+      if (item.rarity === Rarity.RARE) sellPrice *= 2;
+      if (item.rarity === Rarity.EPIC) sellPrice *= 5;
+      if (item.rarity === Rarity.LEGENDARY) sellPrice *= 20;
+      return Math.floor(sellPrice);
   };
 
   const confirmSellItem = () => {
@@ -715,8 +725,8 @@ export default function App() {
       critMultiplier: prev.critMultiplier
     }));
     setInventory([]);
-    setCosts({ click: CLICK_UPGRADE_COST_BASE, auto: AUTO_UPGRADE_COST_BASE, gacha: GACHA_COST_BASE });
-    setMonster({ name: "Слизень", hp: 10, maxHp: 10, level: 1, goldReward: 2 });
+    setCosts({ click: CLICK_UPGRADE_COST_BASE, auto: AUTO_UPGRADE_COST_BASE });
+    setMonster({ name: "Слизень", hp: 15, maxHp: 15, level: 1, goldReward: 3 });
     setBuffs({ damageBuffExpiry: 0, goldBuffExpiry: 0 });
     setSeenZones([]); 
     setShowPrestigeModal(false);
@@ -744,12 +754,12 @@ export default function App() {
   };
 
   const pullGacha = async (isFree = false) => {
-    if (!isFree && (stats.gold < costs.gacha || gachaProcessing)) return;
+    if (!isFree && (stats.gold < gachaCost || gachaProcessing)) return;
 
     if (!isFree) {
         playGachaPullSound();
-        setStats(prev => ({ ...prev, gold: prev.gold - costs.gacha }));
-        setCosts(prev => ({ ...prev, gacha: Math.floor(prev.gacha * 1.1) }));
+        setStats(prev => ({ ...prev, gold: prev.gold - gachaCost }));
+        // No longer increasing gacha cost persistently, it scales with player level
     }
     setGachaProcessing(true);
     
@@ -766,12 +776,23 @@ export default function App() {
     if (typeRoll > 0.66) itemType = ItemType.ARMOR;
     else if (typeRoll > 0.33) itemType = ItemType.ACCESSORY;
 
+    // SCALING LOGIC
+    const itemLevel = stats.level;
+    const baseDamage = Math.max(1, itemLevel * 2); 
+    const baseDefense = Math.max(1, itemLevel * 1.5);
+    
+    let multiplier = 1;
+    if (rarity === Rarity.RARE) multiplier = 3;
+    if (rarity === Rarity.EPIC) multiplier = 8;
+    if (rarity === Rarity.LEGENDARY) multiplier = 20;
+
     let newItem: Item = {
       id: uid(),
       name: 'Опознание...',
       description: '...',
       rarity: rarity,
       type: itemType,
+      itemLevel: itemLevel,
       isEquipped: false,
       damageBonus: 0,
       defenseBonus: 0,
@@ -779,21 +800,16 @@ export default function App() {
       imageIndex: Math.floor(Math.random() * 10)
     };
 
-    if (rarity === Rarity.COMMON) {
-      newItem.damageBonus = itemType === ItemType.WEAPON ? Math.max(1, Math.floor(stats.level * 0.5)) : 0;
-      newItem.defenseBonus = itemType === ItemType.ARMOR ? Math.max(1, Math.floor(stats.level * 0.3)) : 0;
-    } else if (rarity === Rarity.RARE) {
-      newItem.damageBonus = itemType === ItemType.WEAPON ? Math.max(3, stats.level * 1.5) : 0;
-      newItem.defenseBonus = itemType === ItemType.ARMOR ? Math.max(2, stats.level * 1.0) : 0;
-      newItem.goldMultiplier = 0.1;
-    } else if (rarity === Rarity.EPIC) {
-      newItem.damageBonus = itemType === ItemType.WEAPON ? Math.max(10, stats.level * 4) : 0;
-      newItem.defenseBonus = itemType === ItemType.ARMOR ? Math.max(8, stats.level * 3) : 0;
-      newItem.goldMultiplier = 0.3;
-    } else {
-      newItem.damageBonus = itemType === ItemType.WEAPON ? Math.max(50, stats.level * 10) : Math.max(10, stats.level);
-      newItem.defenseBonus = itemType === ItemType.ARMOR ? Math.max(30, stats.level * 8) : 0;
-      newItem.goldMultiplier = 1.0;
+    if (itemType === ItemType.WEAPON) {
+        newItem.damageBonus = Math.floor(baseDamage * multiplier);
+    } else if (itemType === ItemType.ARMOR) {
+        newItem.defenseBonus = Math.floor(baseDefense * multiplier);
+    } else if (itemType === ItemType.ACCESSORY) {
+        // Accessories scale gold drop
+        newItem.goldMultiplier = 0.05 * multiplier; // Common: 5%, Rare: 15%, Epic: 40%, Leg: 100%
+    }
+
+    if (rarity === Rarity.LEGENDARY) {
       setStats(prev => ({...prev, totalLegendariesFound: prev.totalLegendariesFound + 1}));
     }
 
@@ -957,8 +973,8 @@ export default function App() {
          <div className="flex gap-2 mb-3">
              <button 
                 onClick={() => pullGacha(false)}
-                disabled={stats.gold < costs.gacha || gachaProcessing}
-                className={`flex-1 py-3 px-4 rounded font-bold border-b-4 active:border-b-0 active:translate-y-1 transition-all flex justify-between items-center group relative overflow-hidden ${stats.gold >= costs.gacha ? 'bg-purple-600 border-purple-800 hover:bg-purple-500 text-white' : 'bg-slate-700 border-slate-800 text-slate-500 cursor-not-allowed'}`}
+                disabled={stats.gold < gachaCost || gachaProcessing}
+                className={`flex-1 py-3 px-4 rounded font-bold border-b-4 active:border-b-0 active:translate-y-1 transition-all flex justify-between items-center group relative overflow-hidden ${stats.gold >= gachaCost ? 'bg-purple-600 border-purple-800 hover:bg-purple-500 text-white' : 'bg-slate-700 border-slate-800 text-slate-500 cursor-not-allowed'}`}
              >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:animate-[shimmer_2s_infinite]"></div>
                 <div className="flex items-center gap-2 relative z-10">
@@ -966,7 +982,7 @@ export default function App() {
                     <span className="text-sm">Призыв</span>
                 </div>
                 <div className="flex items-center gap-1 bg-black/20 px-3 py-1 rounded relative z-10 text-xs">
-                    <Coins size={12} className="text-yellow-400" /> {costs.gacha}
+                    <Coins size={12} className="text-yellow-400" /> {gachaCost}
                 </div>
              </button>
              <button onClick={() => setShowGachaInfoModal(true)} className="px-3 bg-slate-700 border border-slate-600 rounded flex items-center justify-center hover:bg-slate-600">

@@ -1,9 +1,8 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Pixel Loot Lord</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -13,37 +12,44 @@
         background-color: #0f172a;
         color: #e2e8f0;
         overflow: hidden; /* Prevent pull-to-refresh on mobile */
+        touch-action: manipulation;
       }
       
       /* Pixelated look for images */
-      img {
+      img, svg {
         image-rendering: pixelated;
       }
 
       /* Custom Scrollbar */
       ::-webkit-scrollbar {
-        width: 8px;
+        width: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: #1e293b; 
+        background: #0f172a; 
       }
       ::-webkit-scrollbar-thumb {
-        background: #475569; 
+        background: #334155; 
+        border-radius: 3px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #64748b; 
+        background: #475569; 
       }
 
       /* Animations */
       @keyframes floatUp {
-        0% { transform: translateY(0) scale(0.5); opacity: 0; }
-        20% { transform: translateY(-10px) scale(1.2); opacity: 1; }
-        100% { transform: translateY(-80px) scale(1); opacity: 0; }
+        0% { transform: translateY(0) scale(0.8); opacity: 0; }
+        15% { transform: translateY(-15px) scale(1.1); opacity: 0.9; } 
+        100% { transform: translateY(-60px) scale(1); opacity: 0; }
       }
       .float-text {
-        animation: floatUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        animation: floatUp 0.8s ease-out forwards;
         will-change: transform, opacity;
         pointer-events: none;
+        position: absolute;
+        z-index: 50;
+        user-select: none;
+        text-shadow: 1px 1px 0 #000;
+        opacity: 0.9; /* Slightly transparent base */
       }
 
       @keyframes shake {
@@ -77,7 +83,7 @@
         100% { transform: translate(2px, -4px) rotate(-2deg); }
       }
       .shake-hard {
-        animation: shakeHard 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        animation: shakeHard 0.4s cubic-bezier(.36,.07,.19,.97) both;
       }
 
       @keyframes glow {
@@ -96,7 +102,7 @@
         100% { transform: scale(1); opacity: 1; filter: brightness(1); }
       }
       .pop-in {
-        animation: popIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
       }
 
       @keyframes highlightPulse {
@@ -105,23 +111,26 @@
         100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); }
       }
       .highlight-pulse {
-        animation: highlightPulse 1.5s ease-out;
+        animation: highlightPulse 1s ease-out;
       }
 
       /* Crit Text Effect */
       .crit-text {
-        text-shadow: 0 0 5px #ef4444, 0 0 10px #b91c1c;
-        font-size: 1.5em;
+        text-shadow: 0 0 8px #ef4444;
+        font-size: 1.4em !important;
+        z-index: 60 !important;
       }
     </style>
   <script type="importmap">
 {
   "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0"
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0"
   }
 }
 </script>
