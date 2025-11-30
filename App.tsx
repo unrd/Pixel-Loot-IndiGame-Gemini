@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Coins, Zap, Sword, Crown, Sparkles, Skull, Ghost, Repeat, Trophy, Lock, CheckCircle, Save, ShoppingBag, Clock, Shield, Gift, Shirt, HelpCircle, X, MapPin, Info, ArrowRight, AlertTriangle, Map as MapIcon, ArrowUpCircle, Trash2, Volume2, VolumeX, List, Grid, Menu, LayoutDashboard, Calendar, History, Box, Search, Settings, Dice5, Tent } from 'lucide-react';
-import { Item, Rarity, Monster, PlayerStats, FloatingText, Achievement, ItemType, Buffs, Zone, StoryChoice, NPC, NPCId, DialogOption } from './types';
-import { MONSTER_NAMES, BOSS_NAMES, BOSS_INFO, BASE_DROP_RATES, GACHA_COST_BASE, CLICK_UPGRADE_COST_BASE, AUTO_UPGRADE_COST_BASE, ACHIEVEMENTS, SHOP_ITEMS, BASE_CRIT_CHANCE, BASE_CRIT_MULTIPLIER, ZONES, RARITY_LABELS, CHANGELOG, RANDOM_EVENTS, STATIC_ITEMS, STATIC_DESCRIPTIONS, LOOTBOX_COST, NPCS } from './constants';
+import { Coins, Zap, Sword, Crown, Sparkles, Skull, Ghost, Repeat, Trophy, Lock, CheckCircle, Save, ShoppingBag, Gift, Shirt, X, Info, ArrowRight, Map as MapIcon, ArrowUpCircle, Trash2, Volume2, VolumeX, List, Grid, Menu, Box, Tent, History } from 'lucide-react';
+import { Item, Rarity, Monster, PlayerStats, FloatingText, ItemType, Buffs, Zone, StoryChoice, NPC, NPCId, DialogOption } from './types';
+import { MONSTER_NAMES, BOSS_NAMES, BOSS_INFO, BASE_DROP_RATES, GACHA_COST_BASE, CLICK_UPGRADE_COST_BASE, AUTO_UPGRADE_COST_BASE, ACHIEVEMENTS, SHOP_ITEMS, BASE_CRIT_CHANCE, BASE_CRIT_MULTIPLIER, ZONES, CHANGELOG, RANDOM_EVENTS, STATIC_ITEMS, STATIC_DESCRIPTIONS, LOOTBOX_COST, NPCS } from './constants';
 import { generateItemDetails } from './services/geminiService';
 import { InventoryItem } from './components/InventoryItem';
 import { PixelMonster } from './components/PixelMonster';
-import { playClickSound, playDeathSound, playGoldSound, playUpgradeSound, playGachaPullSound, playGachaRevealSound, playBackgroundMusic, stopBackgroundMusic, playZoneUnlockTheme, toggleMute } from './services/audioService';
+import { playClickSound, playDeathSound, playGoldSound, playUpgradeSound, playGachaPullSound, playGachaRevealSound, playBackgroundMusic, playZoneUnlockTheme, toggleMute } from './services/audioService';
 
 // Utility for ID generation
 const uid = () => Math.random().toString(36).substr(2, 9);
@@ -440,11 +440,11 @@ export default function App() {
       let rewardText = "";
       if (roll < 0.5) {
           const gold = Math.floor(monster.goldReward * 20 * (1 + Math.random()));
-          setStats(prev => ({ ...prev, gold: prev.gold + gold }));
+          setStats((prev: PlayerStats) => ({ ...prev, gold: prev.gold + gold }));
           rewardText = `${gold} Золота`;
       } else if (roll < 0.8) {
            const souls = 1;
-           setStats(prev => ({ ...prev, souls: prev.souls + souls }));
+           setStats((prev: PlayerStats) => ({ ...prev, souls: prev.souls + souls }));
            rewardText = `${souls} Душа`;
       } else {
            pullGacha(true); 
@@ -846,7 +846,7 @@ export default function App() {
   const goldBuffRemaining = Math.max(0, buffs.goldBuffExpiry - now);
   const totalBuffTime = 120000; // Assuming standard 2 min for bar scaling
 
-  const StatRow = ({ label, value, tooltip, icon }: { label: string, value: string, tooltip: string, icon: React.ReactNode }) => (
+  const StatRow = ({ label, value, icon }: { label: string, value: string, icon: React.ReactNode }) => (
     <div className="flex justify-between items-center py-2 border-b border-slate-700/50">
       <div className="flex items-center gap-2 relative group cursor-help">
           <div className="text-slate-400">{icon}</div>
@@ -866,9 +866,9 @@ export default function App() {
           </div>
           
           <div className="space-y-1 mb-6">
-              <StatRow label="Уровень" value={stats.level.toString()} tooltip="" icon={<Crown size={14}/>} />
-              <StatRow label="Души" value={`${stats.souls}`} tooltip="" icon={<Ghost size={14}/>} />
-              <StatRow label="Золото" value={`${stats.gold}`} tooltip="" icon={<Coins size={14}/>} />
+              <StatRow label="Уровень" value={stats.level.toString()} icon={<Crown size={14}/>} />
+              <StatRow label="Души" value={`${stats.souls}`} icon={<Ghost size={14}/>} />
+              <StatRow label="Золото" value={`${stats.gold}`} icon={<Coins size={14}/>} />
           </div>
 
           <div className="flex items-center gap-2 mb-4 text-blue-400 font-bold border-b border-slate-700 pb-2">
@@ -1164,9 +1164,9 @@ export default function App() {
                              </div>
                              <div className="border-t border-slate-700 pt-4">
                                 <h3 className="text-xs uppercase font-bold text-slate-500 mb-2">Прогресс</h3>
-                                <StatRow label="Уровень" value={stats.level.toString()} tooltip="" icon={<Crown size={14}/>} />
-                                <StatRow label="Клик" value={(stats.clickDamage * activeEffects.damageMult).toFixed(0)} tooltip="" icon={<Sword size={14}/>} />
-                                <StatRow label="DPS" value={(stats.autoDps * activeEffects.damageMult).toFixed(0)} tooltip="" icon={<Zap size={14}/>} />
+                                <StatRow label="Уровень" value={stats.level.toString()} icon={<Crown size={14}/>} />
+                                <StatRow label="Клик" value={(stats.clickDamage * activeEffects.damageMult).toFixed(0)} icon={<Sword size={14}/>} />
+                                <StatRow label="DPS" value={(stats.autoDps * activeEffects.damageMult).toFixed(0)} icon={<Zap size={14}/>} />
                              </div>
                           </div>
                       )}
@@ -1513,15 +1513,15 @@ export default function App() {
                   <button onClick={() => setShowStatsModal(false)} className="absolute top-2 right-2 text-slate-400 hover:text-white"><X/></button>
                   <h2 className="text-xl text-white font-bold mb-4 flex items-center gap-2">СТАТИСТИКА</h2>
                   <div className="space-y-1 text-xs md:text-sm">
-                      <StatRow label="Уровень" value={stats.level.toString()} tooltip="" icon={<Crown size={14}/>} />
-                      <StatRow label="Клик" value={(stats.clickDamage * activeEffects.damageMult).toFixed(0)} tooltip="" icon={<Sword size={14}/>} />
-                      <StatRow label="DPS" value={(stats.autoDps * activeEffects.damageMult).toFixed(0)} tooltip="" icon={<Zap size={14}/>} />
-                      <StatRow label="Крит" value={`${(stats.critChance*100).toFixed(1)}%`} tooltip="" icon={<Sparkles size={14}/>} />
-                      <StatRow label="Души" value={`${stats.souls}`} tooltip="" icon={<Ghost size={14}/>} />
-                      <StatRow label="Всего Золота" value={`${stats.totalGoldCollected}`} tooltip="" icon={<Coins size={14}/>} />
-                      <StatRow label="Убито" value={`${stats.totalMonstersKilled}`} tooltip="" icon={<Skull size={14}/>} />
-                      <StatRow label="Легендарки" value={`${stats.totalLegendariesFound}`} tooltip="" icon={<Trophy size={14}/>} />
-                      <StatRow label="Лутбоксы" value={`${stats.lootBoxes}`} tooltip="" icon={<Box size={14}/>} />
+                      <StatRow label="Уровень" value={stats.level.toString()} icon={<Crown size={14}/>} />
+                      <StatRow label="Клик" value={(stats.clickDamage * activeEffects.damageMult).toFixed(0)} icon={<Sword size={14}/>} />
+                      <StatRow label="DPS" value={(stats.autoDps * activeEffects.damageMult).toFixed(0)} icon={<Zap size={14}/>} />
+                      <StatRow label="Крит" value={`${(stats.critChance*100).toFixed(1)}%`} icon={<Sparkles size={14}/>} />
+                      <StatRow label="Души" value={`${stats.souls}`} icon={<Ghost size={14}/>} />
+                      <StatRow label="Всего Золота" value={`${stats.totalGoldCollected}`} icon={<Coins size={14}/>} />
+                      <StatRow label="Убито" value={`${stats.totalMonstersKilled}`} icon={<Skull size={14}/>} />
+                      <StatRow label="Легендарки" value={`${stats.totalLegendariesFound}`} icon={<Trophy size={14}/>} />
+                      <StatRow label="Лутбоксы" value={`${stats.lootBoxes}`} icon={<Box size={14}/>} />
                   </div>
               </div>
           </div>

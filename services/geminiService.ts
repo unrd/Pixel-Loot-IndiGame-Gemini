@@ -2,7 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Item, Rarity, ItemType } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Ensure a fallback string is provided if env var is missing during build time check
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
 
 // Generates flavor text and unique names for ANY item
 export const generateItemDetails = async (level: number, itemType: ItemType, rarity: Rarity): Promise<Partial<Item>> => {

@@ -1,5 +1,5 @@
+
 import React from 'react';
-import { BOSS_NAMES } from '../constants';
 
 interface Props {
   name: string;
@@ -225,7 +225,7 @@ export const PixelMonster: React.FC<Props> = ({ name, isBoss, className }) => {
   const activePalette = isBoss ? { ...palette } : palette;
   if (isBoss) {
       // Shift colors slightly for boss variants or add distinct colors
-      if (activePalette['#']) activePalette['#'] = adjustColor(activePalette['#'], -40); // Darker
+      if (activePalette['#']) activePalette['#'] = adjustColor(activePalette['#']); // Darker
   }
 
   const cellSize = 10;
@@ -273,7 +273,7 @@ export const PixelMonster: React.FC<Props> = ({ name, isBoss, className }) => {
   );
 };
 
-// Helper to darken colors for bosses
-function adjustColor(color: string, amount: number) {
-    return color; // Simplification: in real app use hex manipulation, but CSS filters on parent do enough lifting
+// Helper to darken colors for bosses (simplified)
+function adjustColor(color: string) {
+    return color; 
 }

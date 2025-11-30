@@ -2,7 +2,7 @@
 import React from 'react';
 import { Item, Rarity, ItemType } from '../types';
 import { RARITY_COLORS, RARITY_LABELS } from '../constants';
-import { Sword, Coins, Shield, Sparkles, User, Check, Shirt, Trash2, ArrowUpCircle } from 'lucide-react';
+import { Sword, Coins, Shield, Sparkles, Shirt } from 'lucide-react';
 
 interface Props {
   item: Item;
@@ -28,7 +28,6 @@ export const InventoryItem: React.FC<Props> = ({ item, isNew, onSell }) => {
   if (type === ItemType.ACCESSORY) TypeIcon = Sparkles;
   if (type === ItemType.ARMOR) TypeIcon = Shirt;
 
-  const typeLabel = type === ItemType.WEAPON ? 'Оружие' : (type === ItemType.ACCESSORY ? 'Аксессуар' : 'Броня');
   const textColor = RARITY_COLORS[item.rarity];
 
   return (
@@ -41,7 +40,7 @@ export const InventoryItem: React.FC<Props> = ({ item, isNew, onSell }) => {
       
       {item.isEquipped && (
          <div className="absolute top-0 right-0 p-1 bg-green-600 text-white rounded-bl-lg z-10 shadow-sm">
-            <Check size={12} />
+            <div className="w-3 h-3 border-r-2 border-b-2 border-white rotate-45 transform -translate-y-[2px]"></div>
          </div>
       )}
 
