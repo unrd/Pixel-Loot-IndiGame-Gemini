@@ -1,0 +1,133 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixel Loot Lord</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Press Start 2P', cursive;
+        background-color: #0f172a;
+        color: #e2e8f0;
+        overflow: hidden; /* Prevent pull-to-refresh on mobile */
+      }
+      
+      /* Pixelated look for images */
+      img {
+        image-rendering: pixelated;
+      }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #1e293b; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #475569; 
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #64748b; 
+      }
+
+      /* Animations */
+      @keyframes floatUp {
+        0% { transform: translateY(0) scale(0.5); opacity: 0; }
+        20% { transform: translateY(-10px) scale(1.2); opacity: 1; }
+        100% { transform: translateY(-80px) scale(1); opacity: 0; }
+      }
+      .float-text {
+        animation: floatUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        will-change: transform, opacity;
+        pointer-events: none;
+      }
+
+      @keyframes shake {
+        0% { transform: translate(1px, 1px) rotate(0deg); }
+        10% { transform: translate(-1px, -2px) rotate(-1deg); }
+        20% { transform: translate(-3px, 0px) rotate(1deg); }
+        30% { transform: translate(3px, 2px) rotate(0deg); }
+        40% { transform: translate(1px, -1px) rotate(1deg); }
+        50% { transform: translate(-1px, 2px) rotate(-1deg); }
+        60% { transform: translate(-3px, 1px) rotate(0deg); }
+        70% { transform: translate(3px, 1px) rotate(-1deg); }
+        80% { transform: translate(-1px, -1px) rotate(1deg); }
+        90% { transform: translate(1px, 2px) rotate(0deg); }
+        100% { transform: translate(1px, -2px) rotate(-1deg); }
+      }
+      .shake {
+        animation: shake 0.3s;
+      }
+
+      @keyframes shakeHard {
+        0% { transform: translate(2px, 2px) rotate(0deg); }
+        10% { transform: translate(-2px, -4px) rotate(-2deg); }
+        20% { transform: translate(-6px, 0px) rotate(2deg); }
+        30% { transform: translate(6px, 4px) rotate(0deg); }
+        40% { transform: translate(2px, -2px) rotate(2deg); }
+        50% { transform: translate(-2px, 4px) rotate(-2deg); }
+        60% { transform: translate(-6px, 2px) rotate(0deg); }
+        70% { transform: translate(6px, 2px) rotate(-2deg); }
+        80% { transform: translate(-2px, -2px) rotate(2deg); }
+        90% { transform: translate(2px, 4px) rotate(0deg); }
+        100% { transform: translate(2px, -4px) rotate(-2deg); }
+      }
+      .shake-hard {
+        animation: shakeHard 0.5s cubic-bezier(.36,.07,.19,.97) both;
+      }
+
+      @keyframes glow {
+        0% { box-shadow: 0 0 5px #eab308; }
+        50% { box-shadow: 0 0 20px #eab308, 0 0 10px #facc15; }
+        100% { box-shadow: 0 0 5px #eab308; }
+      }
+      .legendary-glow {
+        animation: glow 2s infinite;
+      }
+
+      /* New Item Animations */
+      @keyframes popIn {
+        0% { transform: scale(0.8) translateY(-10px); opacity: 0; filter: brightness(2); }
+        60% { transform: scale(1.05) translateY(0); opacity: 1; filter: brightness(1.2); }
+        100% { transform: scale(1); opacity: 1; filter: brightness(1); }
+      }
+      .pop-in {
+        animation: popIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      }
+
+      @keyframes highlightPulse {
+        0% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.7); border-color: #fbbf24; }
+        70% { box-shadow: 0 0 0 8px rgba(234, 179, 8, 0); border-color: #fff; }
+        100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); }
+      }
+      .highlight-pulse {
+        animation: highlightPulse 1.5s ease-out;
+      }
+
+      /* Crit Text Effect */
+      .crit-text {
+        text-shadow: 0 0 5px #ef4444, 0 0 10px #b91c1c;
+        font-size: 1.5em;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
