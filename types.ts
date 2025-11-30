@@ -1,4 +1,5 @@
 
+
 export enum Rarity {
   COMMON = 'Common',
   RARE = 'Rare',
@@ -55,6 +56,7 @@ export interface PlayerStats {
 
   // Loot Boxes
   lootBoxes: number;
+  totalLootBoxesOpened: number;
 
   // Lifetime Stats
   totalMonstersKilled: number;

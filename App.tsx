@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Coins, Zap, Sword, Crown, Sparkles, Skull, Ghost, Repeat, Trophy, Lock, CheckCircle, Save, ShoppingBag, Gift, Shirt, X, Info, ArrowRight, Map as MapIcon, ArrowUpCircle, Trash2, Volume2, VolumeX, List, Grid, Menu, Box, Tent, History } from 'lucide-react';
+import { Coins, Sword, Crown, Ghost, Trophy, List, Menu, Box, Tent, History, Info, X, Map as MapIcon, ArrowUpCircle, Volume2, VolumeX, ArrowRight, Grid, ShoppingBag, Zap, Lock, CheckCircle } from 'lucide-react';
 import { Item, Rarity, Monster, PlayerStats, FloatingText, ItemType, Buffs, Zone, StoryChoice, NPC, NPCId, DialogOption } from './types';
-import { MONSTER_NAMES, BOSS_NAMES, BOSS_INFO, BASE_DROP_RATES, GACHA_COST_BASE, CLICK_UPGRADE_COST_BASE, AUTO_UPGRADE_COST_BASE, ACHIEVEMENTS, SHOP_ITEMS, BASE_CRIT_CHANCE, BASE_CRIT_MULTIPLIER, ZONES, CHANGELOG, RANDOM_EVENTS, STATIC_ITEMS, STATIC_DESCRIPTIONS, LOOTBOX_COST, NPCS } from './constants';
+import { MONSTER_NAMES, BOSS_NAMES, GACHA_COST_BASE, CLICK_UPGRADE_COST_BASE, AUTO_UPGRADE_COST_BASE, ACHIEVEMENTS, SHOP_ITEMS, BASE_CRIT_CHANCE, BASE_CRIT_MULTIPLIER, ZONES, CHANGELOG, RANDOM_EVENTS, STATIC_ITEMS, STATIC_DESCRIPTIONS, LOOTBOX_COST, NPCS, BOSS_INFO, BASE_DROP_RATES, RARITY_COLORS } from './constants';
 import { generateItemDetails } from './services/geminiService';
 import { InventoryItem } from './components/InventoryItem';
 import { PixelMonster } from './components/PixelMonster';
@@ -28,6 +29,7 @@ const INITIAL_STATS: PlayerStats = {
   unlockedAchievements: [],
   critChance: BASE_CRIT_CHANCE,
   critMultiplier: BASE_CRIT_MULTIPLIER,
+  totalLootBoxesOpened: 0,
   lastLoginTime: Date.now(),
   loginStreak: 1,
   lastRewardClaimDate: 0,
@@ -110,7 +112,6 @@ export default function App() {
   const [showPrestigeModal, setShowPrestigeModal] = useState(false);
   const [showAchievementsModal, setShowAchievementsModal] = useState(false);
   const [showShopModal, setShowShopModal] = useState(false);
-  const [showStatsModal, setShowStatsModal] = useState(false);
   const [showStoryModal, setShowStoryModal] = useState(false);
   const [showBossIntro, setShowBossIntro] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
@@ -142,7 +143,6 @@ export default function App() {
   const [autoSaveText, setAutoSaveText] = useState<string | null>(null);
   const [eventToast, setEventToast] = useState<{title: string, desc: string} | null>(null);
 
-  const [tutorialStep, setTutorialStep] = useState(0);
   const [showTutorial, setShowTutorial] = useState(false);
 
   const [currentZone, setCurrentZone] = useState<Zone>(ZONES[0]);
@@ -154,10 +154,7 @@ export default function App() {
       return [];
   });
 
-  // Dynamic Gacha Cost based on level to control economy
   const gachaCost = Math.floor(GACHA_COST_BASE * Math.pow(1.05, stats.level));
-
-  // --- Initialization Effects ---
 
   const showToast = (message: string) => {
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
@@ -170,7 +167,7 @@ export default function App() {
   const resumeAudio = () => {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (AudioContext) {
-      // Dummy resume
+      // Dummy resume context
     }
   };
 
@@ -182,11 +179,10 @@ export default function App() {
         const now = Date.now();
         const diffSeconds = Math.floor((now - lastTime) / 1000);
 
-        // Offline Gold
         if (diffSeconds > 60 && stats.autoDps > 0) {
              const earned = Math.floor(stats.autoDps * diffSeconds * 0.5); // 50% efficiency
              if (earned > 0) {
-                 setStats(prev => ({ ...prev, gold: prev.gold + earned, totalGoldCollected: prev.totalGoldCollected + earned }));
+                 setStats((prev: PlayerStats) => ({ ...prev, gold: prev.gold + earned, totalGoldCollected: prev.totalGoldCollected + earned }));
                  setShowOfflineProgressModal(earned);
              }
         }
@@ -215,7 +211,6 @@ export default function App() {
       const isCompleted = localStorage.getItem(TUTORIAL_KEY);
       if (!isCompleted) {
           setShowTutorial(true);
-          setTutorialStep(1);
           setIsGamePaused(true);
       }
   }, []);
@@ -244,7 +239,6 @@ export default function App() {
              if (!showStoryModal) playBackgroundMusic(active.id); 
           });
       } else {
-          // Check Boss status for music
           if (!isMuted && !showTutorial && !showStoryModal) {
               if (monster.isBoss) {
                   playBackgroundMusic('boss');
@@ -256,7 +250,6 @@ export default function App() {
   }, [stats.level, isMuted, monster.isBoss]);
 
   useEffect(() => {
-    // Sync music if boss state changes while staying in same zone
     if (!showStoryModal && !showTutorial && !isMuted) {
         playBackgroundMusic(monster.isBoss ? 'boss' : currentZone.id);
     }
@@ -291,7 +284,7 @@ export default function App() {
 
   const handleBossFail = () => {
       const newLevel = Math.max(1, stats.level - 1);
-      setStats(prev => ({ ...prev, level: newLevel, experience: 0 }));
+      setStats((prev: PlayerStats) => ({ ...prev, level: newLevel, experience: 0 }));
       spawnMonster(newLevel);
       showToast("ПОРАЖЕНИЕ! Уровень понижен.");
   };
@@ -301,7 +294,7 @@ export default function App() {
     let gMultItem = 0;
     inventory.forEach(item => {
       itemDamage += item.damageBonus;
-      if (item.defenseBonus) itemDamage += item.defenseBonus;
+      if (item.defenseBonus) itemDamage += item.defenseBonus; 
       gMultItem += item.goldMultiplier;
     });
 
@@ -343,17 +336,10 @@ export default function App() {
         name = MONSTER_NAMES[Math.min(Math.floor(level / 5), MONSTER_NAMES.length - 1)];
     }
     
-    // Balanced HP and Gold Scaling
-    // HP scales faster than linear to require upgrades
-    // Gold scales slightly slower to require more grind
-    
     const baseHp = 15;
     const baseGold = 3;
     
-    // 1.25^Level means HP doubles roughly every 3-4 levels
     const hp = Math.floor(baseHp * Math.pow(1.25, level - 1) * (isBoss ? 10 : 1));
-    
-    // 1.20^Level means Gold doubles roughly every 4 levels
     const gold = Math.floor(baseGold * Math.pow(1.20, level - 1) * (isBoss ? 5 : 1));
     
     setMonster({
@@ -374,13 +360,13 @@ export default function App() {
 
   const buyLootBox = () => {
     if (stats.gold < LOOTBOX_COST) return;
-    setStats(prev => ({ ...prev, gold: prev.gold - LOOTBOX_COST, lootBoxes: prev.lootBoxes + 1 }));
+    setStats((prev: PlayerStats) => ({ ...prev, gold: prev.gold - LOOTBOX_COST, lootBoxes: prev.lootBoxes + 1 }));
     playUpgradeSound();
   };
 
   const spinLootBox = () => {
     if (stats.lootBoxes <= 0 || isLootBoxSpinning) return;
-    setStats(prev => ({ ...prev, lootBoxes: prev.lootBoxes - 1 }));
+    setStats((prev: PlayerStats) => ({ ...prev, lootBoxes: prev.lootBoxes - 1, totalLootBoxesOpened: (prev.totalLootBoxesOpened || 0) + 1 }));
     setIsLootBoxSpinning(true);
     setLootBoxReward(null);
     playGachaPullSound();
@@ -390,7 +376,7 @@ export default function App() {
     const amount = Math.min(10, stats.lootBoxes);
     if (amount <= 0) return;
     
-    setStats(prev => ({ ...prev, lootBoxes: prev.lootBoxes - amount }));
+    setStats((prev: PlayerStats) => ({ ...prev, lootBoxes: prev.lootBoxes - amount, totalLootBoxesOpened: (prev.totalLootBoxesOpened || 0) + amount }));
     
     const results: string[] = [];
     let totalGold = 0;
@@ -406,13 +392,13 @@ export default function App() {
             totalSouls += 1;
             results.push(`1 Душа`);
         } else {
-            pullGacha(true); // Triggers item modal independently, might stack
+            pullGacha(true); // Triggers item modal independently
             results.push("ПРЕДМЕТ (В инвентаре)");
         }
     }
     
-    if (totalGold > 0) setStats(prev => ({ ...prev, gold: prev.gold + totalGold }));
-    if (totalSouls > 0) setStats(prev => ({ ...prev, souls: prev.souls + totalSouls }));
+    if (totalGold > 0) setStats((prev: PlayerStats) => ({ ...prev, gold: prev.gold + totalGold }));
+    if (totalSouls > 0) setStats((prev: PlayerStats) => ({ ...prev, souls: prev.souls + totalSouls }));
     
     setLootBoxSummary(results);
     playGachaRevealSound(false);
@@ -523,18 +509,18 @@ export default function App() {
 
          if (event.rewardType === 'gold_mult') {
              const bonus = goldEarned * event.value;
-             setStats(prev => ({...prev, gold: prev.gold + bonus}));
+             setStats((prev: PlayerStats) => ({...prev, gold: prev.gold + bonus}));
          } else if (event.rewardType === 'buff_damage') {
-             setBuffs(prev => ({...prev, damageBuffExpiry: Date.now() + event.value}));
+             setBuffs((prev: Buffs) => ({...prev, damageBuffExpiry: Date.now() + event.value}));
          } else if (event.rewardType === 'gold_flat') {
-             setStats(prev => ({...prev, gold: prev.gold + event.value}));
+             setStats((prev: PlayerStats) => ({...prev, gold: prev.gold + event.value}));
          } else if (event.rewardType === 'mystery_box') {
-             setStats(prev => ({...prev, lootBoxes: prev.lootBoxes + 1}));
+             setStats((prev: PlayerStats) => ({...prev, lootBoxes: prev.lootBoxes + 1}));
              showToast("Найдена Загадочная Коробка!");
          }
     }
 
-    setStats(prev => {
+    setStats((prev: PlayerStats) => {
       const newExp = prev.experience + 10;
       const levelUpByExp = newExp >= prev.maxExperience;
       const forceLevelUp = deadMonster.isBoss;
@@ -557,7 +543,6 @@ export default function App() {
     setFloatingTexts(prev => [...prev.slice(-10), goldText]);
     setTimeout(() => setFloatingTexts(prev => prev.filter(t => t.id !== goldText.id)), 800);
     
-    // Spawn next monster
     const wasBoss = deadMonster.isBoss;
     const willLevelUp = (stats.experience + 10) >= stats.maxExperience;
     const nextLevel = (wasBoss || willLevelUp) ? stats.level + 1 : stats.level;
@@ -565,17 +550,16 @@ export default function App() {
   };
 
   const buyUpgrade = (type: 'click' | 'auto') => {
-    // Smoother scaling for costs (1.15x instead of 1.5x)
     if (type === 'click') {
       if (stats.gold >= costs.click) {
         playUpgradeSound();
-        setStats(prev => ({ ...prev, gold: prev.gold - costs.click, clickDamage: prev.clickDamage + 1 }));
+        setStats((prev: PlayerStats) => ({ ...prev, gold: prev.gold - costs.click, clickDamage: prev.clickDamage + 1 }));
         setCosts(prev => ({ ...prev, click: Math.floor(prev.click * 1.15) }));
       }
     } else {
       if (stats.gold >= costs.auto) {
         playUpgradeSound();
-        setStats(prev => ({ ...prev, gold: prev.gold - costs.auto, autoDps: prev.autoDps + 1 }));
+        setStats((prev: PlayerStats) => ({ ...prev, gold: prev.gold - costs.auto, autoDps: prev.autoDps + 1 }));
         setCosts(prev => ({ ...prev, auto: Math.floor(prev.auto * 1.15) }));
       }
     }
@@ -593,21 +577,20 @@ export default function App() {
   const handleNPCAction = (option: DialogOption) => {
       if (option.reward) {
           if (option.reward.type === 'gold') {
-              setStats(prev => ({...prev, gold: prev.gold + (option.reward!.value || 0)}));
+              setStats((prev: PlayerStats) => ({...prev, gold: prev.gold + (option.reward!.value || 0)}));
           } else if (option.reward.type === 'buff_dmg') {
-              setBuffs(prev => ({...prev, damageBuffExpiry: Date.now() + (option.reward!.value || 0)}));
+              setBuffs((prev: Buffs) => ({...prev, damageBuffExpiry: Date.now() + (option.reward!.value || 0)}));
           }
       }
       
       if (option.action === 'trade') {
-          // Handled via reward logic or specific function
           if (option.text.includes('1000g')) {
                if (stats.gold >= 1000) {
-                   setStats(prev => ({...prev, gold: prev.gold - 1000}));
+                   setStats((prev: PlayerStats) => ({...prev, gold: prev.gold - 1000}));
                    showToast("Приятно иметь с вами дело.");
                } else {
                    showToast("Недостаточно золота.");
-                   return; // Don't proceed
+                   return; 
                }
           }
       }
@@ -620,7 +603,6 @@ export default function App() {
       }
   };
 
-  // ... (Keep existing item/shop logic) ...
   const buyShopItem = (itemId: string) => {
       const item = SHOP_ITEMS.find(i => i.id === itemId);
       if (!item) return;
@@ -630,7 +612,7 @@ export default function App() {
       if (userBalance < cost) return;
 
       playUpgradeSound();
-      setStats(prev => ({ ...prev, [currency]: userBalance - cost }));
+      setStats((prev: PlayerStats) => ({ ...prev, [currency]: userBalance - cost }));
 
       if (item.category === '05ru') {
           const fakeCode = "05" + Math.random().toString(36).substr(2, 6).toUpperCase();
@@ -672,7 +654,7 @@ export default function App() {
   const confirmSellItem = () => {
       if (!itemToSell) return;
       const price = calculateSellPrice(itemToSell);
-      setStats(prev => ({...prev, gold: prev.gold + price}));
+      setStats((prev: PlayerStats) => ({...prev, gold: prev.gold + price}));
       setInventory(prev => prev.filter(i => i.id !== itemToSell.id));
       showToast(`Продано: +${price} G`);
       setItemToSell(null);
@@ -684,12 +666,12 @@ export default function App() {
       const currentItem = inventory.find(i => i.type === pendingItem.type);
       if (action === 'keep_old') {
           const price = calculateSellPrice(pendingItem);
-          setStats(prev => ({...prev, gold: prev.gold + price}));
+          setStats((prev: PlayerStats) => ({...prev, gold: prev.gold + price}));
           showToast(`Продано: +${price} G`);
       } else {
           if (currentItem) {
               const price = calculateSellPrice(currentItem);
-              setStats(prev => ({...prev, gold: prev.gold + price}));
+              setStats((prev: PlayerStats) => ({...prev, gold: prev.gold + price}));
               showToast(`Продано старое: +${price} G`);
           }
           setInventory(prev => {
@@ -711,7 +693,7 @@ export default function App() {
     const soulsEarned = calculatePotentialSouls();
     if (soulsEarned === 0) return;
     playUpgradeSound();
-    setStats(prev => ({
+    setStats((prev: PlayerStats) => ({
       ...INITIAL_STATS,
       souls: prev.souls + soulsEarned,
       prestigeDamageMult: prev.prestigeDamageMult,
@@ -721,7 +703,8 @@ export default function App() {
       totalLegendariesFound: prev.totalLegendariesFound,
       unlockedAchievements: prev.unlockedAchievements,
       critChance: prev.critChance, 
-      critMultiplier: prev.critMultiplier
+      critMultiplier: prev.critMultiplier,
+      totalLootBoxesOpened: prev.totalLootBoxesOpened // Added
     }));
     setInventory([]);
     setCosts({ click: CLICK_UPGRADE_COST_BASE, auto: AUTO_UPGRADE_COST_BASE });
@@ -735,7 +718,7 @@ export default function App() {
       const cost = 10;
       if (stats.souls < cost) return;
       playUpgradeSound();
-      setStats(prev => ({
+      setStats((prev: PlayerStats) => ({
           ...prev, souls: prev.souls - cost,
           prestigeDamageMult: type === 'dmg' ? prev.prestigeDamageMult + 0.5 : prev.prestigeDamageMult,
           prestigeGoldMult: type === 'gold' ? prev.prestigeGoldMult + 0.5 : prev.prestigeGoldMult
@@ -743,9 +726,9 @@ export default function App() {
   };
 
   const handleStoryChoice = (choice: StoryChoice) => {
-      if (choice.rewardType === 'gold') setStats(prev => ({ ...prev, gold: prev.gold + choice.rewardValue }));
-      else if (choice.rewardType === 'buff_damage') setBuffs(prev => ({ ...prev, damageBuffExpiry: Date.now() + choice.rewardValue }));
-      else if (choice.rewardType === 'buff_gold') setBuffs(prev => ({ ...prev, goldBuffExpiry: Date.now() + choice.rewardValue }));
+      if (choice.rewardType === 'gold') setStats((prev: PlayerStats) => ({ ...prev, gold: prev.gold + choice.rewardValue }));
+      else if (choice.rewardType === 'buff_damage') setBuffs((prev: Buffs) => ({ ...prev, damageBuffExpiry: Date.now() + choice.rewardValue }));
+      else if (choice.rewardType === 'buff_gold') setBuffs((prev: Buffs) => ({ ...prev, goldBuffExpiry: Date.now() + choice.rewardValue }));
       showToast(choice.outcomeText);
       setShowStoryModal(false);
       setIsGamePaused(false);
@@ -757,8 +740,7 @@ export default function App() {
 
     if (!isFree) {
         playGachaPullSound();
-        setStats(prev => ({ ...prev, gold: prev.gold - gachaCost }));
-        // No longer increasing gacha cost persistently, it scales with player level
+        setStats((prev: PlayerStats) => ({ ...prev, gold: prev.gold - gachaCost }));
     }
     setGachaProcessing(true);
     
@@ -775,7 +757,6 @@ export default function App() {
     if (typeRoll > 0.66) itemType = ItemType.ARMOR;
     else if (typeRoll > 0.33) itemType = ItemType.ACCESSORY;
 
-    // SCALING LOGIC
     const itemLevel = stats.level;
     const baseDamage = Math.max(1, itemLevel * 2); 
     const baseDefense = Math.max(1, itemLevel * 1.5);
@@ -804,15 +785,13 @@ export default function App() {
     } else if (itemType === ItemType.ARMOR) {
         newItem.defenseBonus = Math.floor(baseDefense * multiplier);
     } else if (itemType === ItemType.ACCESSORY) {
-        // Accessories scale gold drop
-        newItem.goldMultiplier = 0.05 * multiplier; // Common: 5%, Rare: 15%, Epic: 40%, Leg: 100%
+        newItem.goldMultiplier = 0.05 * multiplier; 
     }
 
     if (rarity === Rarity.LEGENDARY) {
-      setStats(prev => ({...prev, totalLegendariesFound: prev.totalLegendariesFound + 1}));
+      setStats((prev: PlayerStats) => ({...prev, totalLegendariesFound: prev.totalLegendariesFound + 1}));
     }
 
-    // Static Name Generation for non-legendary
     if (rarity !== Rarity.LEGENDARY) {
         const names = STATIC_ITEMS[itemType][rarity];
         const randomName = names[Math.floor(Math.random() * names.length)];
@@ -826,7 +805,6 @@ export default function App() {
     setIsGamePaused(true); 
     setGachaProcessing(false);
 
-    // Call Gemini only for Legendary
     if (rarity === Rarity.LEGENDARY) {
         generateItemDetails(stats.level, itemType, rarity).then(details => {
             setPendingItem(prev => prev ? ({ ...prev, ...details }) : null);
@@ -843,7 +821,7 @@ export default function App() {
   const now = Date.now();
   const damageBuffRemaining = Math.max(0, buffs.damageBuffExpiry - now);
   const goldBuffRemaining = Math.max(0, buffs.goldBuffExpiry - now);
-  const totalBuffTime = 120000; // Assuming standard 2 min for bar scaling
+  const totalBuffTime = 120000; 
 
   const StatRow = ({ label, value, icon }: { label: string, value: string, icon: React.ReactNode }) => (
     <div className="flex justify-between items-center py-2 border-b border-slate-700/50">
@@ -854,8 +832,6 @@ export default function App() {
       <span className="font-mono text-white text-xs md:text-sm">{value}</span>
     </div>
   );
-
-  // --- COMPONENT SECTIONS ---
 
   const LeftPanel = () => (
       <div className="bg-slate-800 border-r-4 border-slate-700 p-4 flex flex-col h-full overflow-y-auto custom-scrollbar">
@@ -876,10 +852,10 @@ export default function App() {
           </div>
 
           <div className="space-y-3">
-              <button onClick={() => setShowAchievementsModal(true)} className="w-full bg-slate-700 hover:bg-slate-600 p-2 rounded text-xs text-left flex items-center gap-2 border border-slate-600 shadow-sm transition-transform active:scale-95">
+              <button onClick={() => setShowAchievementsModal(true)} className="w-full bg-slate-700 hover:bg-slate-600 p-2 rounded-sm text-xs text-left flex items-center gap-2 border border-slate-600 shadow-sm transition-transform active:scale-95">
                   <Trophy size={14} className="text-yellow-400"/> Достижения
               </button>
-              <button onClick={() => setShowChangelogModal(true)} className="w-full bg-slate-700 hover:bg-slate-600 p-2 rounded text-xs text-left flex items-center gap-2">
+              <button onClick={() => setShowChangelogModal(true)} className="w-full bg-slate-700 hover:bg-slate-600 p-2 rounded-sm text-xs text-left flex items-center gap-2">
                   <List size={14} /> Список Изменений
               </button>
           </div>
@@ -889,17 +865,16 @@ export default function App() {
   const BattleArena = () => (
       <div className="h-full relative flex flex-col items-center p-6 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
         
-        {/* Active Effects Bar */}
         <div className="w-full max-w-md flex justify-center gap-4 mb-4 z-20 h-8">
             {damageBuffRemaining > 0 && (
-                <div className="flex-1 bg-slate-900/80 border border-red-500 rounded p-1 flex items-center gap-2 relative overflow-hidden">
+                <div className="flex-1 bg-slate-900/80 border border-red-500 rounded-none p-1 flex items-center gap-2 relative overflow-hidden">
                     <div className="absolute inset-0 bg-red-900/30" style={{ width: `${(damageBuffRemaining / totalBuffTime) * 100}%` }}></div>
                     <Sword size={12} className="text-red-400 relative z-10" />
                     <span className="text-[10px] text-white relative z-10 font-mono flex-1 text-center">{formatTime(damageBuffRemaining)}</span>
                 </div>
             )}
             {goldBuffRemaining > 0 && (
-                <div className="flex-1 bg-slate-900/80 border border-yellow-500 rounded p-1 flex items-center gap-2 relative overflow-hidden">
+                <div className="flex-1 bg-slate-900/80 border border-yellow-500 rounded-none p-1 flex items-center gap-2 relative overflow-hidden">
                     <div className="absolute inset-0 bg-yellow-900/30" style={{ width: `${(goldBuffRemaining / totalBuffTime) * 100}%` }}></div>
                     <Coins size={12} className="text-yellow-400 relative z-10" />
                     <span className="text-[10px] text-white relative z-10 font-mono flex-1 text-center">{formatTime(goldBuffRemaining)}</span>
@@ -907,9 +882,8 @@ export default function App() {
             )}
         </div>
 
-        {/* Boss Timer */}
         {monster.isBoss && (
-           <div className="absolute top-20 w-1/2 h-3 bg-slate-800 rounded-full border border-red-900 overflow-hidden shadow-lg z-10">
+           <div className="absolute top-20 w-1/2 h-3 bg-slate-800 rounded-none border border-red-900 overflow-hidden shadow-lg z-10">
                <div 
                   className={`h-full bg-yellow-500 transition-all duration-1000 linear ${isGamePaused ? 'opacity-50' : ''}`}
                   style={{ width: `${((monster.timeRemaining || 0) / 30) * 100}%` }}
@@ -917,7 +891,6 @@ export default function App() {
            </div>
         )}
 
-        {/* Monster */}
         <div className="flex-1 flex flex-col items-center justify-center w-full">
             <div className="text-center mb-4 z-10 select-none">
             {monster.isBoss && <div className="text-red-500 font-bold animate-pulse text-xs tracking-widest mb-1">☠ БОСС ☠</div>}
@@ -931,7 +904,7 @@ export default function App() {
                 className={`relative group cursor-pointer z-10 touch-manipulation select-none ${isGamePaused ? 'pointer-events-none opacity-80 grayscale' : ''}`} 
                 onClick={() => !isGamePaused && dealDamage(stats.clickDamage, true)}
             >
-                <div className="absolute -top-4 left-0 w-full h-3 bg-slate-800 border border-slate-600 rounded-full overflow-hidden">
+                <div className="absolute -top-4 left-0 w-full h-3 bg-slate-800 border border-slate-600 rounded-none overflow-hidden">
                     <div 
                     className={`h-full transition-all duration-200 ${monster.isBoss ? 'bg-red-600' : 'bg-green-500'}`} 
                     style={{ width: `${(monster.hp / monster.maxHp) * 100}%` }} 
@@ -951,683 +924,533 @@ export default function App() {
             </div>
         </div>
         
-        {/* Floating Texts Container */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          {floatingTexts.map(ft => (
+          {floatingTexts.map(text => (
             <div 
-              key={ft.id} 
-              className={`absolute float-text ${ft.color} z-20 whitespace-nowrap ${ft.isCrit ? 'crit-text' : ''}`}
-              style={{ left: `${ft.x}%`, top: `${ft.y}%` }}
+                key={text.id} 
+                className={`float-text absolute font-pixel font-bold ${text.color} ${text.isCrit ? 'crit-text' : 'text-sm'}`}
+                style={{ left: `${text.x}%`, top: `${text.y}%` }}
             >
-              {ft.text}
+                {text.text}
             </div>
           ))}
         </div>
       </div>
   );
 
-  const UpgradesPanel = () => (
-    <div className="p-4 bg-slate-900 h-full flex flex-col">
-         {/* Gacha Button */}
-         <div className="flex gap-2 mb-3">
-             <button 
-                onClick={() => pullGacha(false)}
-                disabled={stats.gold < gachaCost || gachaProcessing}
-                className={`flex-1 py-3 px-4 rounded font-bold border-b-4 active:border-b-0 active:translate-y-1 transition-all flex justify-between items-center group relative overflow-hidden ${stats.gold >= gachaCost ? 'bg-purple-600 border-purple-800 hover:bg-purple-500 text-white' : 'bg-slate-700 border-slate-800 text-slate-500 cursor-not-allowed'}`}
-             >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:animate-[shimmer_2s_infinite]"></div>
-                <div className="flex items-center gap-2 relative z-10">
-                    <Sparkles size={20} className={gachaProcessing ? 'animate-spin' : ''} />
-                    <span className="text-sm">Призыв</span>
-                </div>
-                <div className="flex items-center gap-1 bg-black/20 px-3 py-1 rounded relative z-10 text-xs">
-                    <Coins size={12} className="text-yellow-400" /> {gachaCost}
-                </div>
+  const RightPanel = () => (
+      <div className="bg-slate-800 border-l-4 border-slate-700 flex flex-col h-full overflow-hidden">
+          <div className="flex border-b border-slate-700 bg-slate-900">
+             <button onClick={() => setMobileTab('upgrades')} className={`flex-1 p-3 flex justify-center items-center ${mobileTab === 'upgrades' ? 'bg-slate-800 text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-400 hover:text-white'}`}>
+                <ArrowUpCircle size={20} />
              </button>
-             <button onClick={() => setShowGachaInfoModal(true)} className="px-3 bg-slate-700 border border-slate-600 rounded flex items-center justify-center hover:bg-slate-600">
-                 <Info size={16} className="text-slate-300"/>
+             <button onClick={() => setMobileTab('inventory')} className={`flex-1 p-3 flex justify-center items-center ${mobileTab === 'inventory' ? 'bg-slate-800 text-blue-400 border-b-2 border-blue-400' : 'text-slate-400 hover:text-white'}`}>
+                <Sword size={20} />
              </button>
-         </div>
-
-         <div className="flex-1 overflow-y-auto custom-scrollbar pb-16 md:pb-0 space-y-2">
-             <button 
-                onClick={() => buyUpgrade('click')}
-                disabled={stats.gold < costs.click}
-                className={`p-3 rounded border-b-4 active:border-b-0 active:translate-y-1 transition-all text-left flex justify-between items-center w-full ${stats.gold >= costs.click ? 'bg-blue-600 border-blue-800 hover:bg-blue-500 text-white' : 'bg-slate-700 border-slate-800 text-slate-500 cursor-not-allowed'}`}
-             >
-                <div>
-                    <div className="text-[10px] font-bold uppercase opacity-80 mb-1 flex items-center gap-1"><Sword size={12}/> Клик +1</div>
-                    <div className="text-xs">Урон: {stats.clickDamage}</div>
-                </div>
-                <div className="flex items-center gap-1 text-xs bg-black/20 px-2 py-1 rounded">
-                     <Coins size={12} className="text-yellow-400" /> {costs.click}
-                </div>
+             <button onClick={() => setMobileTab('shop')} className={`flex-1 p-3 flex justify-center items-center ${mobileTab === 'shop' ? 'bg-slate-800 text-green-400 border-b-2 border-green-400' : 'text-slate-400 hover:text-white'}`}>
+                <ShoppingBag size={20} />
              </button>
-
-             <button 
-                onClick={() => buyUpgrade('auto')}
-                disabled={stats.gold < costs.auto}
-                className={`p-3 rounded border-b-4 active:border-b-0 active:translate-y-1 transition-all text-left flex justify-between items-center w-full ${stats.gold >= costs.auto ? 'bg-green-600 border-green-800 hover:bg-green-500 text-white' : 'bg-slate-700 border-slate-800 text-slate-500 cursor-not-allowed'}`}
-             >
-                <div>
-                    <div className="text-[10px] font-bold uppercase opacity-80 mb-1 flex items-center gap-1"><Zap size={12}/> Авто +1</div>
-                    <div className="text-xs">DPS: {stats.autoDps}</div>
-                </div>
-                <div className="flex items-center gap-1 text-xs bg-black/20 px-2 py-1 rounded">
-                     <Coins size={12} className="text-yellow-400" /> {costs.auto}
-                </div>
+             <button onClick={() => setMobileTab('info')} className={`flex-1 p-3 flex justify-center items-center ${mobileTab === 'info' ? 'bg-slate-800 text-purple-400 border-b-2 border-purple-400' : 'text-slate-400 hover:text-white'}`}>
+                <Menu size={20} />
              </button>
+          </div>
 
-             {/* Loot Box Section */}
-             <div className="bg-slate-800 p-2 rounded border border-slate-600 mt-4">
-                 <div className="text-[10px] text-yellow-400 font-bold uppercase mb-2 flex justify-between items-center">
-                     <span className="flex items-center gap-1"><Box size={12}/> Лутбоксы</span>
-                     <span>В наличии: {stats.lootBoxes}</span>
-                 </div>
-                 <div className="flex gap-2">
-                     <button onClick={buyLootBox} disabled={stats.gold < LOOTBOX_COST} className={`flex-1 py-2 text-xs rounded font-bold ${stats.gold >= LOOTBOX_COST ? 'bg-yellow-700 text-yellow-100 hover:bg-yellow-600' : 'bg-slate-700 text-slate-500'}`}>
-                         Купить ({LOOTBOX_COST}g)
-                     </button>
-                     <button onClick={() => setShowLootBoxModal(true)} disabled={stats.lootBoxes <= 0} className={`flex-1 py-2 text-xs rounded font-bold ${stats.lootBoxes > 0 ? 'bg-green-700 text-white hover:bg-green-600' : 'bg-slate-700 text-slate-500'}`}>
-                         Открыть
-                     </button>
-                 </div>
-             </div>
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+              {mobileTab === 'upgrades' && (
+                  <div className="space-y-4">
+                      <div className="bg-slate-700/50 p-3 rounded-sm border border-slate-600">
+                          <div className="flex justify-between mb-1">
+                              <span className="text-sm font-bold flex items-center gap-2"><Sword size={14}/> Клик</span>
+                              <span className="text-xs text-yellow-400">{costs.click} G</span>
+                          </div>
+                          <div className="text-xs text-slate-400 mb-2">Урон: {stats.clickDamage}</div>
+                          <button onClick={() => buyUpgrade('click')} className="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded-sm text-xs font-bold shadow active:translate-y-0.5">
+                              Улучшить
+                          </button>
+                      </div>
 
-             {/* Action Grid (Shop, Prestige) */}
-             <div className="grid grid-cols-2 gap-2 mt-2">
-                 <button onClick={() => setShowShopModal(true)} className="p-3 bg-slate-800 border border-slate-600 rounded flex flex-col items-center justify-center hover:bg-slate-700">
-                      <ShoppingBag size={20} className="text-blue-400 mb-1"/>
-                      <span className="text-[10px] font-bold">Магазин</span>
-                 </button>
-                 <button onClick={() => setShowPrestigeModal(true)} className="p-3 bg-slate-800 border border-slate-600 rounded flex flex-col items-center justify-center hover:bg-slate-700">
-                      <Ghost size={20} className="text-purple-400 mb-1"/>
-                      <span className="text-[10px] font-bold">Престиж</span>
-                 </button>
-             </div>
-             
-             {/* System Grid */}
-             <div className="grid grid-cols-3 gap-2 mt-2">
-                  <button onClick={handleMuteToggle} className="p-2 bg-slate-800 border border-slate-600 rounded flex items-center justify-center hover:bg-slate-700">
-                     {isMuted ? <VolumeX size={16} className="text-red-400" /> : <Volume2 size={16} className="text-green-400" />}
-                  </button>
-                  <button onClick={() => setShowStatsModal(true)} className="p-2 bg-slate-800 border border-slate-600 rounded flex items-center justify-center hover:bg-slate-700">
-                     <Info size={16} className="text-slate-400" />
-                  </button>
-                   <button onClick={() => setShowMapModal(true)} className="p-2 bg-slate-800 border border-slate-600 rounded flex items-center justify-center hover:bg-slate-700">
-                     <MapIcon size={16} className="text-slate-400" />
-                  </button>
-             </div>
-         </div>
-    </div>
-  );
+                      <div className="bg-slate-700/50 p-3 rounded-sm border border-slate-600">
+                          <div className="flex justify-between mb-1">
+                              <span className="text-sm font-bold flex items-center gap-2"><Zap size={14}/> Авто</span>
+                              <span className="text-xs text-yellow-400">{costs.auto} G</span>
+                          </div>
+                          <div className="text-xs text-slate-400 mb-2">DPS: {stats.autoDps}</div>
+                          <button onClick={() => buyUpgrade('auto')} className="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded-sm text-xs font-bold shadow active:translate-y-0.5">
+                              Улучшить
+                          </button>
+                      </div>
 
-  const InventoryPanel = () => (
-    <div className="flex flex-col h-full bg-slate-800">
-        <div className="flex gap-1 p-2 border-b border-slate-700 bg-slate-900">
-            <button onClick={() => setInventoryTab('ALL')} className={`flex-1 p-2 rounded text-[10px] md:text-xs font-bold uppercase ${inventoryTab === 'ALL' ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-500'}`}><Grid size={16} className="mx-auto mb-1"/>Все</button>
-            <button onClick={() => setInventoryTab(ItemType.WEAPON)} className={`flex-1 p-2 rounded text-[10px] md:text-xs font-bold uppercase ${inventoryTab === ItemType.WEAPON ? 'bg-red-900/50 text-red-200' : 'bg-slate-800 text-slate-500'}`}><Sword size={16} className="mx-auto mb-1"/>Оружие</button>
-            <button onClick={() => setInventoryTab(ItemType.ARMOR)} className={`flex-1 p-2 rounded text-[10px] md:text-xs font-bold uppercase ${inventoryTab === ItemType.ARMOR ? 'bg-blue-900/50 text-blue-200' : 'bg-slate-800 text-slate-500'}`}><Shirt size={16} className="mx-auto mb-1"/>Броня</button>
-            <button onClick={() => setInventoryTab(ItemType.ACCESSORY)} className={`flex-1 p-2 rounded text-[10px] md:text-xs font-bold uppercase ${inventoryTab === ItemType.ACCESSORY ? 'bg-purple-900/50 text-purple-200' : 'bg-slate-800 text-slate-500'}`}><Sparkles size={16} className="mx-auto mb-1"/>Акс</button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-800/50 pb-20 md:pb-0">
-             {inventory.length === 0 ? (
-                <div className="text-center text-slate-600 text-xs py-8 italic border-2 border-dashed border-slate-700 rounded">
-                    Пусто... <br/> Испытай удачу в Ритуале!
-                </div>
-            ) : (
-                <div className="space-y-2">
-                    {inventory.filter(item => inventoryTab === 'ALL' || item.type === inventoryTab).map(item => (
-                         <InventoryItem key={item.id} item={item} onSell={(i) => setItemToSell(i)} />
-                    ))}
-                </div>
-            )}
-        </div>
-    </div>
+                      <div className="bg-gradient-to-r from-purple-900 to-slate-900 p-3 rounded-sm border border-purple-500/50 mt-6 relative">
+                         <div className="flex justify-between items-center mb-2">
+                             <span className="text-sm font-bold text-purple-200 flex items-center gap-2"><Ghost size={14}/> Призыв</span>
+                             <button onClick={() => setShowGachaInfoModal(true)} className="p-1 text-slate-400 hover:text-white"><Info size={12}/></button>
+                         </div>
+                         <button 
+                            disabled={gachaProcessing}
+                            onClick={() => pullGacha(false)}
+                            className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-slate-700 disabled:cursor-not-allowed py-3 rounded-sm text-xs font-bold shadow active:translate-y-0.5 text-white flex justify-center items-center gap-2"
+                         >
+                            {gachaProcessing ? 'Призыв...' : `Призвать (${gachaCost} G)`}
+                         </button>
+                      </div>
+
+                      <div className="bg-gradient-to-r from-orange-900 to-slate-900 p-3 rounded-sm border border-orange-500/50 mt-4">
+                         <div className="flex justify-between items-center mb-2">
+                             <span className="text-sm font-bold text-orange-200 flex items-center gap-2"><Box size={14}/> Лутбокс</span>
+                             <span className="text-xs text-slate-300">У вас: {stats.lootBoxes}</span>
+                         </div>
+                         <div className="grid grid-cols-2 gap-2">
+                            <button onClick={buyLootBox} className="bg-orange-700 hover:bg-orange-600 py-2 rounded-sm text-[10px] font-bold">Купить ({LOOTBOX_COST}G)</button>
+                            <button onClick={() => setShowLootBoxModal(true)} disabled={stats.lootBoxes === 0} className="bg-green-600 hover:bg-green-500 disabled:bg-slate-700 disabled:opacity-50 py-2 rounded-sm text-[10px] font-bold">Открыть</button>
+                         </div>
+                      </div>
+                  </div>
+              )}
+
+              {mobileTab === 'inventory' && (
+                  <div>
+                      <div className="flex gap-1 mb-2 overflow-x-auto pb-2">
+                          {['ALL', ItemType.WEAPON, ItemType.ARMOR, ItemType.ACCESSORY].map(tab => (
+                             <button 
+                                key={tab}
+                                onClick={() => setInventoryTab(tab as ItemType | 'ALL')}
+                                className={`px-2 py-1 rounded-sm text-[10px] border ${inventoryTab === tab ? 'bg-slate-600 border-white text-white' : 'bg-slate-800 border-slate-600 text-slate-400'}`}
+                             >
+                                {tab === 'ALL' ? 'Все' : (tab === ItemType.WEAPON ? 'Оружие' : (tab === ItemType.ARMOR ? 'Броня' : 'Акс'))}
+                             </button>
+                          ))}
+                      </div>
+                      {inventory.filter(i => inventoryTab === 'ALL' || i.type === inventoryTab).length === 0 ? (
+                          <div className="text-center text-slate-500 py-8 text-xs">Инвентарь пуст</div>
+                      ) : (
+                          inventory.filter(i => inventoryTab === 'ALL' || i.type === inventoryTab).map(item => (
+                            <InventoryItem 
+                                key={item.id} 
+                                item={item} 
+                                onSell={(item) => setItemToSell(item)}
+                            />
+                          ))
+                      )}
+                  </div>
+              )}
+
+              {mobileTab === 'shop' && (
+                  <div>
+                      <div className="flex mb-4 border-b border-slate-600">
+                          <button onClick={() => setShopTab('game')} className={`flex-1 py-2 text-xs font-bold ${shopTab === 'game' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-400'}`}>Предметы</button>
+                          <button onClick={() => setShopTab('05ru')} className={`flex-1 py-2 text-xs font-bold ${shopTab === '05ru' ? 'text-green-400 border-b-2 border-green-400' : 'text-slate-400'}`}>05.ru</button>
+                      </div>
+                      <div className="space-y-3">
+                          {SHOP_ITEMS.filter(i => i.category === shopTab).map(item => (
+                              <div key={item.id} className="bg-slate-700/50 p-2 rounded-sm border border-slate-600 flex justify-between items-center">
+                                  <div>
+                                      <div className="text-xs font-bold text-white">{item.name}</div>
+                                      <div className="text-[10px] text-slate-400">{item.description}</div>
+                                  </div>
+                                  <button onClick={() => buyShopItem(item.id)} className="bg-green-700 hover:bg-green-600 px-3 py-1 rounded-sm text-[10px] font-bold text-white min-w-[60px]">
+                                      {item.cost} {item.currency === 'souls' ? 'Souls' : 'G'}
+                                  </button>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              )}
+
+              {mobileTab === 'info' && (
+                   <div className="grid grid-cols-2 gap-3">
+                       <button onClick={() => setShowMapModal(true)} className="bg-slate-700 p-3 rounded-sm flex flex-col items-center gap-2 hover:bg-slate-600">
+                           <MapIcon size={24} className="text-blue-400"/>
+                           <span className="text-xs">Карта Мира</span>
+                       </button>
+                       <button onClick={() => openNPCInteraction(NPCId.GUIDE)} className="bg-slate-700 p-3 rounded-sm flex flex-col items-center gap-2 hover:bg-slate-600">
+                           <Tent size={24} className="text-green-400"/>
+                           <span className="text-xs">Лагерь</span>
+                       </button>
+                       <button onClick={handleMuteToggle} className="bg-slate-700 p-3 rounded-sm flex flex-col items-center gap-2 hover:bg-slate-600">
+                           {isMuted ? <VolumeX size={24} className="text-red-400"/> : <Volume2 size={24} className="text-slate-200"/>}
+                           <span className="text-xs">Звук</span>
+                       </button>
+                       <button onClick={() => setShowPrestigeModal(true)} className="bg-slate-700 p-3 rounded-sm flex flex-col items-center gap-2 hover:bg-slate-600">
+                           <Ghost size={24} className="text-purple-400"/>
+                           <span className="text-xs">Престиж</span>
+                       </button>
+                   </div>
+              )}
+          </div>
+      </div>
   );
 
   return (
-    <div 
-        className="h-screen bg-slate-900 text-slate-100 flex flex-col md:flex-row overflow-hidden relative select-none transition-colors duration-1000"
-        style={{
-             background: currentZone.bgGradient,
-             backgroundSize: 'cover',
-             backgroundPosition: 'center'
-        }}
-    >
-      
-      {/* Event/Story Toast */}
-      {eventToast && (
-          <div className="fixed top-20 md:top-8 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top fade-in duration-300 w-11/12 md:w-auto pointer-events-none">
-             <div className="bg-slate-800/90 backdrop-blur-md border-2 border-yellow-500 text-white px-6 py-4 rounded-lg shadow-2xl">
-                 <h3 className="text-yellow-400 font-bold mb-1 flex items-center gap-2"><Sparkles size={16} /> {eventToast.title}</h3>
-                 <p className="text-xs md:text-sm">{eventToast.desc}</p>
-             </div>
-          </div>
-      )}
+    <div className="h-screen bg-slate-900 text-slate-200 font-pixel overflow-hidden flex flex-col md:flex-row">
+      {/* --- DESKTOP LAYOUT --- */}
+      <div className="hidden md:flex w-full h-full">
+         <div className="w-1/4 h-full z-20 shadow-xl">
+             <LeftPanel />
+         </div>
+         <div className="flex-1 h-full z-10">
+             <BattleArena />
+         </div>
+         <div className="w-1/4 h-full z-20 shadow-xl">
+             <RightPanel />
+         </div>
+      </div>
 
-      {/* Achievement Toast */}
-      {achievementToast && !eventToast && (
-        <div className="fixed top-16 md:top-4 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top duration-300 w-11/12 md:w-auto pointer-events-none">
-           <div className="bg-yellow-600 text-white px-4 py-2 md:px-6 md:py-3 rounded-full shadow-lg flex items-center justify-center gap-2 border-2 border-yellow-300">
-              <Gift size={16} className="text-yellow-200" />
-              <span className="font-bold text-xs md:text-sm text-center">{achievementToast}</span>
-           </div>
+      {/* --- MOBILE LAYOUT --- */}
+      <div className="md:hidden flex flex-col w-full h-full">
+         <div className="h-[40%]">
+             <BattleArena />
+         </div>
+         <div className="h-[60%] border-t-4 border-slate-700 z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
+             <RightPanel />
+         </div>
+      </div>
+      
+      {/* --- MODALS --- */}
+      
+      {/* Toast */}
+      {achievementToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-yellow-500/90 text-black px-4 py-2 rounded-sm shadow-lg z-50 animate-bounce font-bold text-xs text-center border-2 border-white">
+          {achievementToast}
         </div>
       )}
 
-      {/* Auto Save */}
       {autoSaveText && (
-         <div className="fixed bottom-20 md:bottom-4 right-4 text-[10px] md:text-xs text-green-400 bg-slate-800 p-2 rounded border border-green-800 z-50 flex items-center gap-2 animate-pulse">
-            <Save size={12} /> {autoSaveText}
-         </div>
-      )}
-
-      {/* --- DESKTOP VIEW STRUCTURE (3-Column) --- */}
-      <div className="flex-1 flex flex-col md:flex-row h-full">
-          
-          {/* COLUMN 1: Left Panel (Desktop Only) */}
-          <div className="hidden md:block w-72 h-full z-30 shadow-xl">
-             <LeftPanel />
-          </div>
-
-          {/* COLUMN 2: Battle Arena (Center) */}
-          <div className="h-[40vh] md:h-full md:flex-1 relative border-x border-slate-700 z-10">
-             <BattleArena />
-          </div>
-
-          {/* COLUMN 3: Right Panel (Desktop) / Bottom Sheet (Mobile) */}
-          <div className="h-[60vh] md:h-full md:w-96 bg-slate-800 border-t-4 md:border-t-0 md:border-l-4 border-slate-700 flex flex-col shadow-2xl relative z-30">
-              
-              {/* Desktop Tabs Header */}
-              <div className="hidden md:flex p-4 bg-slate-900 border-b border-slate-700 justify-between items-center">
-                   <div>
-                       <div className="flex items-center gap-2 font-bold"><span className="bg-blue-600 text-xs px-2 py-1 rounded">LVL {stats.level}</span> <span className="text-xs text-slate-400">{stats.experience}/{stats.maxExperience} XP</span></div>
-                   </div>
-              </div>
-
-              {/* Mobile Content Switcher */}
-              <div className="flex-1 overflow-hidden relative">
-                  
-                  {/* Mobile View */}
-                  <div className="md:hidden h-full">
-                      {mobileTab === 'upgrades' && <UpgradesPanel />}
-                      {mobileTab === 'inventory' && <InventoryPanel />}
-                      {mobileTab === 'info' && (
-                          <div className="p-4 overflow-y-auto h-full space-y-4 pb-20">
-                             <div className="grid grid-cols-2 gap-2">
-                                <button onClick={() => setShowMapModal(true)} className="bg-slate-700 p-3 rounded flex flex-col items-center justify-center gap-2"><MapIcon /> Карта Мира</button>
-                                <button onClick={() => openNPCInteraction(NPCId.GUIDE)} className="bg-slate-700 p-3 rounded flex flex-col items-center justify-center gap-2"><Tent /> Лагерь</button>
-                                <button onClick={() => setShowChangelogModal(true)} className="bg-slate-700 p-3 rounded flex flex-col items-center justify-center gap-2"><List /> Изменения</button>
-                                <button onClick={() => setShowAchievementsModal(true)} className="bg-slate-700 p-3 rounded flex flex-col items-center justify-center gap-2"><Trophy /> Достижения</button>
-                             </div>
-                             <div className="border-t border-slate-700 pt-4">
-                                <h3 className="text-xs uppercase font-bold text-slate-500 mb-2">Прогресс</h3>
-                                <StatRow label="Уровень" value={stats.level.toString()} icon={<Crown size={14}/>} />
-                                <StatRow label="Клик" value={(stats.clickDamage * activeEffects.damageMult).toFixed(0)} icon={<Sword size={14}/>} />
-                                <StatRow label="DPS" value={(stats.autoDps * activeEffects.damageMult).toFixed(0)} icon={<Zap size={14}/>} />
-                             </div>
-                          </div>
-                      )}
-                      {mobileTab === 'shop' && (
-                         <div className="p-4 h-full flex items-center justify-center pb-20">
-                             <button onClick={() => setShowShopModal(true)} className="bg-blue-600 text-white px-6 py-3 rounded font-bold flex items-center gap-2 shadow-lg animate-bounce">
-                                <ShoppingBag /> Открыть Магазин
-                             </button>
-                         </div>
-                      )}
-                  </div>
-
-                  {/* Desktop View */}
-                  <div className="hidden md:flex flex-col h-full">
-                       <div className="h-1/2 overflow-y-auto border-b border-slate-700">
-                          <InventoryPanel />
-                       </div>
-                       <div className="h-1/2 overflow-y-auto">
-                          <UpgradesPanel />
-                       </div>
-                  </div>
-              </div>
-
-              {/* Mobile Bottom Navigation */}
-              <div className="md:hidden h-16 bg-slate-900 border-t border-slate-700 flex justify-around items-center px-2 flex-shrink-0 z-50">
-                  <button onClick={() => setMobileTab('upgrades')} className={`flex flex-col items-center gap-1 p-2 rounded w-16 ${mobileTab === 'upgrades' ? 'text-yellow-400' : 'text-slate-500'}`}>
-                      <ArrowUpCircle size={20} />
-                      <span className="text-[10px] font-bold">Апгрейд</span>
-                  </button>
-                  <button onClick={() => setMobileTab('inventory')} className={`flex flex-col items-center gap-1 p-2 rounded w-16 ${mobileTab === 'inventory' ? 'text-blue-400' : 'text-slate-500'}`}>
-                      <ShoppingBag size={20} />
-                      <span className="text-[10px] font-bold">Лут</span>
-                  </button>
-                  <button onClick={() => setMobileTab('info')} className={`flex flex-col items-center gap-1 p-2 rounded w-16 ${mobileTab === 'info' ? 'text-green-400' : 'text-slate-500'}`}>
-                      <Menu size={20} />
-                      <span className="text-[10px] font-bold">Меню</span>
-                  </button>
-              </div>
-          </div>
-      </div>
-
-      {/* --- MODALS --- */}
-
-      {/* Loot Box Roulette Modal */}
-      {showLootBoxModal && (
-          <div className="fixed inset-0 z-[120] bg-black/90 flex items-center justify-center p-4">
-               <div className="bg-slate-800 border-4 border-yellow-500 rounded-lg max-w-sm w-full p-6 text-center relative overflow-hidden">
-                   <button onClick={() => setShowLootBoxModal(false)} disabled={isLootBoxSpinning} className="absolute top-2 right-2 text-slate-500 hover:text-white"><X/></button>
-                   <h2 className="text-xl font-bold mb-4 text-yellow-400 uppercase tracking-widest">Лутбокс</h2>
-                   
-                   {!lootBoxSummary && (
-                       <div className="w-32 h-32 bg-slate-900 border-4 border-slate-700 rounded-full mx-auto mb-6 flex items-center justify-center relative shadow-[inset_0_0_20px_black]">
-                           {isLootBoxSpinning ? (
-                               <div className="animate-spin text-4xl">🎲</div> 
-                           ) : (
-                               <Box size={48} className="text-yellow-600 animate-pulse" />
-                           )}
-                           {lootBoxReward && !isLootBoxSpinning && (
-                               <div className="absolute inset-0 bg-slate-800 flex items-center justify-center rounded-full border-4 border-green-500 animate-in zoom-in">
-                                   <span className="font-bold text-sm text-green-400 px-2">{lootBoxReward}</span>
-                               </div>
-                           )}
-                       </div>
-                   )}
-
-                   {/* Mass Loot Summary */}
-                   {lootBoxSummary && (
-                       <div className="mb-4 bg-slate-900 p-2 rounded max-h-40 overflow-y-auto text-left space-y-1 text-xs custom-scrollbar">
-                           {lootBoxSummary.map((res, i) => (
-                               <div key={i} className="text-green-400 border-b border-slate-800 pb-1">{res}</div>
-                           ))}
-                       </div>
-                   )}
-
-                   {!lootBoxReward && !isLootBoxSpinning && !lootBoxSummary && (
-                       <div className="space-y-2">
-                           <button onClick={spinLootBox} className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 rounded uppercase text-lg shadow-lg">
-                               Открыть 1
-                           </button>
-                           {stats.lootBoxes >= 10 && (
-                               <button onClick={openMassLootBoxes} className="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 rounded uppercase text-xs">
-                                   Открыть 10 (Массово)
-                               </button>
-                           )}
-                       </div>
-                   )}
-                   
-                   {(lootBoxReward || lootBoxSummary) && (
-                        <button onClick={() => { setLootBoxReward(null); setLootBoxSummary(null); setShowLootBoxModal(false); }} className="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 rounded uppercase">
-                           Закрыть
-                        </button>
-                   )}
-               </div>
+          <div className="fixed bottom-4 right-4 text-[10px] text-slate-500 opacity-50 flex items-center gap-1">
+              <History size={10} /> {autoSaveText}
           </div>
       )}
 
-      {/* NPC Modal */}
-      {showNPCModal && activeNPC && (
-           <div className="fixed inset-0 z-[110] bg-black/90 flex items-center justify-center p-4">
-               <div className="bg-slate-800 border-4 border-slate-500 rounded-lg max-w-lg w-full p-6 relative">
-                   <h2 className="text-xl text-white font-bold mb-1">{activeNPC.name}</h2>
-                   <div className="text-xs text-slate-400 mb-6 uppercase tracking-widest">{activeNPC.title}</div>
-                   
-                   <div className="bg-slate-900/50 p-4 rounded border border-slate-700 mb-6 min-h-[100px] text-sm italic text-slate-300">
-                       "{activeNPC.dialogues[npcDialogId]?.text}"
-                   </div>
-                   
-                   <div className="space-y-2">
-                       {activeNPC.dialogues[npcDialogId]?.options.map((opt, idx) => (
-                           <button key={idx} onClick={() => handleNPCAction(opt)} className="w-full bg-slate-700 hover:bg-slate-600 text-white py-3 rounded text-left px-4 border border-slate-600 hover:border-slate-400 transition-colors">
-                               {opt.text}
-                           </button>
-                       ))}
-                   </div>
-               </div>
-           </div>
-      )}
-
-      {/* Gacha Info Modal */}
-      {showGachaInfoModal && (
-          <div className="fixed inset-0 z-[110] bg-black/80 flex items-center justify-center p-4">
-              <div className="bg-slate-800 border-2 border-purple-500 rounded-lg max-w-sm w-full p-6 relative">
-                  <button onClick={() => setShowGachaInfoModal(false)} className="absolute top-2 right-2 text-slate-400 hover:text-white"><X/></button>
-                  <h2 className="text-lg font-bold mb-4 text-purple-400 flex items-center gap-2"><Info /> Шансы Призыва</h2>
-                  <div className="space-y-3 text-sm">
-                      <div className="flex justify-between border-b border-slate-700 pb-1">
-                          <span className="text-slate-400">Обычное</span>
-                          <span className="text-white font-mono">{(BASE_DROP_RATES.COMMON * 100).toFixed(0)}%</span>
-                      </div>
-                      <div className="flex justify-between border-b border-slate-700 pb-1">
-                          <span className="text-blue-400">Редкое</span>
-                          <span className="text-white font-mono">{(BASE_DROP_RATES.RARE * 100).toFixed(0)}%</span>
-                      </div>
-                      <div className="flex justify-between border-b border-slate-700 pb-1">
-                          <span className="text-purple-400">Эпическое</span>
-                          <span className="text-white font-mono">{(BASE_DROP_RATES.EPIC * 100).toFixed(0)}%</span>
-                      </div>
-                      <div className="flex justify-between border-b border-slate-700 pb-1">
-                          <span className="text-yellow-400 font-bold animate-pulse">Легендарное</span>
-                          <span className="text-white font-mono">{(BASE_DROP_RATES.LEGENDARY * 100).toFixed(0)}%</span>
-                      </div>
-                  </div>
-                  <div className="mt-4 p-3 bg-slate-900 rounded text-xs text-slate-400 italic">
-                      "Только Легендарные предметы создаются древней магией ИИ..."
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Sell Confirmation Modal */}
-      {itemToSell && (
-          <div className="fixed inset-0 z-[120] bg-black/80 flex items-center justify-center p-4">
-              <div className="bg-slate-800 border-2 border-red-500 rounded-lg max-w-sm w-full p-6 text-center">
-                   <h2 className="text-xl font-bold mb-4 text-white">Продать предмет?</h2>
-                   <div className="mb-4 bg-slate-900 p-4 rounded border border-slate-700">
-                       <InventoryItem item={itemToSell} onSell={() => {}} />
-                   </div>
-                   <p className="text-slate-300 text-sm mb-6">Вы получите: <span className="text-yellow-400 font-bold">{calculateSellPrice(itemToSell)} G</span></p>
-                   <div className="grid grid-cols-2 gap-4">
-                       <button onClick={() => setItemToSell(null)} className="bg-slate-600 text-white py-2 rounded">Отмена</button>
-                       <button onClick={confirmSellItem} className="bg-red-600 text-white py-2 rounded font-bold">Продать</button>
-                   </div>
-              </div>
-          </div>
-      )}
-      
-      {/* Offline Progress Modal */}
-      {showOfflineProgressModal !== null && (
-          <div className="fixed inset-0 z-[110] bg-black/90 flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
-              <div className="bg-slate-800 border-2 border-yellow-500 rounded-lg max-w-sm w-full p-6 text-center">
-                  <h2 className="text-2xl text-yellow-400 font-bold mb-2">С возвращением!</h2>
-                  <p className="text-slate-300 mb-4 text-sm">Пока вас не было, ваши герои заработали:</p>
-                  <div className="text-3xl text-white font-bold mb-6 flex justify-center items-center gap-2">
-                      <Coins className="text-yellow-400"/> {showOfflineProgressModal}
-                  </div>
-                  <button onClick={() => setShowOfflineProgressModal(null)} className="bg-yellow-600 text-white w-full py-2 rounded font-bold">Забрать</button>
-              </div>
-          </div>
-      )}
-
-      {/* Changelog Modal */}
-      {showChangelogModal && (
-          <div className="fixed inset-0 z-[90] bg-black/80 flex items-center justify-center p-4">
-               <div className="bg-slate-800 border-2 border-slate-500 rounded-lg max-w-md w-full p-6 relative">
-                  <button onClick={() => setShowChangelogModal(false)} className="absolute top-2 right-2 text-slate-400 hover:text-white"><X/></button>
-                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><List /> История Обновлений</h2>
-                  <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-                      {CHANGELOG.slice().reverse().map((log, i) => (
-                          <div key={i} className="border-b border-slate-700 pb-2">
-                              <div className="font-bold text-blue-400 text-sm">v{log.version}</div>
-                              <div className="text-slate-300 text-xs">{log.text}</div>
-                          </div>
-                      ))}
-                  </div>
-               </div>
-          </div>
-      )}
-
-      {/* Pending Item Modal */}
+      {/* New Item Modal */}
       {pendingItem && (
-          <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-slate-800 border-4 border-yellow-500 rounded-lg max-w-2xl w-full p-6 relative shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-                  <h2 className="text-xl md:text-2xl text-yellow-400 font-bold mb-4 md:mb-6 text-center uppercase tracking-widest drop-shadow-md">
-                      Ритуал Завершен!
-                  </h2>
-                  <div className="flex flex-col md:flex-row gap-4 items-stretch mb-6">
-                      {/* Old Item */}
-                      {inventory.find(i => i.type === pendingItem.type) ? (
-                          <div className="flex-1 bg-slate-900/50 p-4 rounded border border-slate-700 opacity-70">
-                              <div className="text-xs text-slate-400 uppercase font-bold mb-2">Текущий Предмет</div>
-                              <InventoryItem item={inventory.find(i => i.type === pendingItem.type)!} onSell={() => {}} />
-                              <div className="text-center text-green-400 text-xs mt-2">
-                                  Цена продажи: {calculateSellPrice(inventory.find(i => i.type === pendingItem.type)!)} G
-                              </div>
-                          </div>
-                      ) : (
-                          <div className="flex-1 bg-slate-900/50 p-4 rounded border border-slate-700 flex items-center justify-center text-slate-500 italic text-xs">
-                              Слот пуст
-                          </div>
-                      )}
-                      
-                      <div className="flex items-center justify-center py-2 md:py-0">
-                          <ArrowRight size={24} className="text-yellow-500 rotate-90 md:rotate-0" />
-                      </div>
-
-                      {/* New Item */}
-                      <div className="flex-1 bg-yellow-900/20 p-4 rounded border border-yellow-500 relative">
-                          <div className="absolute -top-3 right-2 bg-yellow-500 text-black text-[10px] font-bold px-2 py-1 rounded animate-bounce">НОВОЕ!</div>
-                          <div className="text-xs text-yellow-200 uppercase font-bold mb-2">Найдено</div>
-                          <InventoryItem item={pendingItem} isNew={true} onSell={() => {}} />
-                           <div className="text-center text-green-400 text-xs mt-2">
-                                  Цена продажи: {calculateSellPrice(pendingItem)} G
-                           </div>
-                      </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                      <button onClick={() => resolvePendingItem('keep_old')} className="bg-slate-700 hover:bg-slate-600 text-slate-300 py-3 rounded font-bold flex items-center justify-center gap-2 transition-colors text-xs md:text-sm">
-                          <Trash2 size={16} /> {inventory.find(i => i.type === pendingItem.type) ? "Оставить Старое" : "Продать Новое"}
-                      </button>
-                      <button onClick={() => resolvePendingItem('equip_new')} className="bg-green-600 hover:bg-green-500 text-white py-3 rounded font-bold flex items-center justify-center gap-2 transition-transform hover:scale-105 shadow-lg border-b-4 border-green-800 text-xs md:text-sm">
-                          <CheckCircle size={16} /> {inventory.find(i => i.type === pendingItem.type) ? "Заменить" : "Забрать"}
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Tutorial Modal */}
-      {showTutorial && (
-          <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4">
-              <div className="bg-slate-800 border-4 border-blue-500 rounded-lg max-w-md w-full p-6 relative shadow-2xl text-center">
-                  {tutorialStep === 1 && (
-                      <>
-                          <h2 className="text-2xl font-bold mb-4 text-yellow-400">Привет, Искатель!</h2>
-                          <p className="mb-6 text-sm">Добро пожаловать в Pixel Loot Lord.</p>
-                          <button onClick={() => setTutorialStep(2)} className="bg-blue-600 text-white py-2 px-6 rounded font-bold w-full">Далее</button>
-                      </>
-                  )}
-                  {tutorialStep === 2 && (
-                      <>
-                          <h2 className="text-2xl font-bold mb-4 text-red-400">Сражайся!</h2>
-                          <p className="mb-6 text-sm">Кликай по монстру сверху, чтобы нанести урон и получить Золото.</p>
-                          <button onClick={() => setTutorialStep(3)} className="bg-blue-600 text-white py-2 px-6 rounded font-bold w-full">Далее</button>
-                      </>
-                  )}
-                   {tutorialStep === 3 && (
-                      <>
-                          <h2 className="text-2xl font-bold mb-4 text-green-400">Качайся!</h2>
-                          <p className="mb-6 text-sm">Используй меню внизу (или справа), чтобы улучшать урон и открывать экипировку.</p>
-                          <button onClick={completeTutorial} className="bg-green-600 text-white py-2 px-6 rounded font-bold w-full">В БОЙ!</button>
-                      </>
-                  )}
-              </div>
-          </div>
-      )}
-
-      {/* Story / Zone Modal */}
-      {showStoryModal && (
-           <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-4 animate-in fade-in duration-500">
-               <div className="max-w-xl w-full text-center relative">
-                   <div className="mb-2 text-yellow-400 text-xs tracking-widest uppercase font-bold">Новая Локация</div>
-                   <h1 className={`text-3xl md:text-5xl font-bold mb-6 ${currentZone.textColor}`}>{currentZone.name}</h1>
-                   <div className="bg-slate-800/80 p-6 rounded-lg border border-slate-600 shadow-2xl backdrop-blur-sm">
-                       <p className="text-sm md:text-lg italic text-slate-300 mb-6">"{currentZone.description}"</p>
-                       <div className="space-y-3">
-                           {currentZone.choices?.map((choice, idx) => (
-                               <button key={idx} onClick={() => handleStoryChoice(choice)} className="w-full bg-slate-700 hover:bg-slate-600 border border-slate-500 p-3 rounded text-left flex justify-between items-center group">
-                                   <span className="font-bold text-white text-sm group-hover:text-yellow-300">{choice.text}</span>
-                               </button>
-                           ))}
-                       </div>
-                   </div>
-               </div>
-           </div>
-      )}
-
-      {/* Map Modal */}
-      {showMapModal && (
-           <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-4">
-               <div className="max-w-3xl w-full relative bg-slate-900 border-4 border-slate-600 rounded-lg p-6 shadow-2xl h-[80vh] flex flex-col">
-                   <button onClick={() => setShowMapModal(false)} className="absolute top-2 right-2 text-slate-400 hover:text-white"><X size={24}/></button>
-                   <h2 className="text-2xl text-white font-bold mb-6 flex items-center gap-2"><MapIcon /> КАРТА</h2>
-                   <div className="mb-4">
-                        <button onClick={() => { setShowMapModal(false); openNPCInteraction(NPCId.GUIDE); }} className="w-full bg-slate-800 border-2 border-yellow-600 p-3 rounded flex items-center justify-center gap-2 hover:bg-slate-700">
-                             <Tent className="text-yellow-500"/> Посетить Лагерь (Безопасная Зона)
-                        </button>
-                   </div>
-                   <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar">
-                       {ZONES.map((zone) => {
-                           const isCurrent = currentZone.id === zone.id;
-                           const isLocked = stats.level < zone.minLevel;
-                           return (
-                               <div key={zone.id} className={`p-4 rounded border-2 transition-all ${isCurrent ? 'bg-slate-800 border-yellow-500' : (isLocked ? 'bg-black/50 border-slate-800 opacity-60' : 'bg-slate-800 border-green-800')}`}>
-                                   <h3 className={`font-bold ${isCurrent ? 'text-yellow-400' : 'text-slate-200'}`}>{zone.name}</h3>
-                                   <p className="text-xs text-slate-400">{zone.minLevel}-{zone.maxLevel}</p>
-                                   {isCurrent && <span className="text-xs text-yellow-500 font-bold">ВЫ ЗДЕСЬ</span>}
-                               </div>
-                           );
-                       })}
-                   </div>
-               </div>
-           </div>
-      )}
-
-      {/* Boss Intro Modal */}
-      {showBossIntro && monster.isBoss && (
-          <div className="fixed inset-0 z-[80] bg-red-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-slate-900 border-4 border-red-600 rounded-xl max-w-lg w-full p-8 text-center shadow-[0_0_50px_rgba(220,38,38,0.5)] relative">
-                  <div className="text-red-500 font-bold tracking-[0.5em] text-xs mb-4 animate-pulse">ОПАСНОСТЬ</div>
-                  <h2 className="text-3xl text-white font-bold mb-2 uppercase">{monster.name}</h2>
-                  <div className="my-6 flex justify-center"><PixelMonster name={monster.name} isBoss={true} className="w-32 h-32 scale-[1.5]" /></div>
-                  <div className="bg-black/40 p-4 rounded border border-red-900/50 mb-6 text-left text-xs text-slate-300">
-                      "{BOSS_INFO[monster.name]?.lore || 'Зло приближается...'}"
-                  </div>
-                  <button onClick={startBossFight} className="w-full bg-red-600 hover:bg-red-500 text-white py-3 rounded font-bold text-lg uppercase shadow-lg border-b-4 border-red-800">В БОЙ!</button>
-              </div>
-          </div>
-      )}
-
-      {/* Stats Modal */}
-      {showStatsModal && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-              <div className="bg-slate-800 border-4 border-slate-600 rounded-lg max-w-md w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
-                  <button onClick={() => setShowStatsModal(false)} className="absolute top-2 right-2 text-slate-400 hover:text-white"><X/></button>
-                  <h2 className="text-xl text-white font-bold mb-4 flex items-center gap-2">СТАТИСТИКА</h2>
-                  <div className="space-y-1 text-xs md:text-sm">
-                      <StatRow label="Уровень" value={stats.level.toString()} icon={<Crown size={14}/>} />
-                      <StatRow label="Клик" value={(stats.clickDamage * activeEffects.damageMult).toFixed(0)} icon={<Sword size={14}/>} />
-                      <StatRow label="DPS" value={(stats.autoDps * activeEffects.damageMult).toFixed(0)} icon={<Zap size={14}/>} />
-                      <StatRow label="Крит" value={`${(stats.critChance*100).toFixed(1)}%`} icon={<Sparkles size={14}/>} />
-                      <StatRow label="Души" value={`${stats.souls}`} icon={<Ghost size={14}/>} />
-                      <StatRow label="Всего Золота" value={`${stats.totalGoldCollected}`} icon={<Coins size={14}/>} />
-                      <StatRow label="Убито" value={`${stats.totalMonstersKilled}`} icon={<Skull size={14}/>} />
-                      <StatRow label="Легендарки" value={`${stats.totalLegendariesFound}`} icon={<Trophy size={14}/>} />
-                      <StatRow label="Лутбоксы" value={`${stats.lootBoxes}`} icon={<Box size={14}/>} />
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Shop Modal */}
-      {showShopModal && (
-          <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-              <div className="bg-slate-800 border-4 border-blue-500 rounded-lg max-w-2xl w-full p-4 md:p-6 relative max-h-[85vh] flex flex-col shadow-[0_0_50px_rgba(59,130,246,0.3)]">
-                <button onClick={() => setShowShopModal(false)} className="absolute top-2 right-2 text-slate-400 hover:text-white"><X/></button>
-                <h2 className="text-xl text-blue-400 font-bold mb-4 flex items-center gap-2"><ShoppingBag /> МАГАЗИН</h2>
-                <div className="text-yellow-400 font-mono mb-2 text-right text-xs">Золото: {stats.gold} G</div>
-                <div className="flex border-b border-slate-600 mb-4">
-                    <button onClick={() => setShopTab('game')} className={`px-4 py-2 text-xs md:text-sm font-bold ${shopTab === 'game' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-400'}`}>Предметы</button>
-                    <button onClick={() => setShopTab('05ru')} className={`px-4 py-2 text-xs md:text-sm font-bold flex items-center gap-2 ${shopTab === '05ru' ? 'text-orange-400 border-b-2 border-orange-400' : 'text-slate-400'}`}>05.ru</button>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="bg-slate-800 p-6 rounded-sm border-2 border-yellow-500 max-w-sm w-full mx-4 relative overflow-hidden">
+            <div className={`absolute top-0 left-0 w-full h-1 ${pendingItem.rarity === Rarity.LEGENDARY ? 'bg-yellow-400 animate-pulse' : 'bg-slate-600'}`}></div>
+            <h2 className="text-center text-xl font-bold mb-4 text-yellow-400 drop-shadow-md">
+                {pendingItem.rarity === Rarity.LEGENDARY ? 'ЛЕГЕНДАРНАЯ НАХОДКА!' : 'Новый Предмет!'}
+            </h2>
+            
+            <div className="flex justify-center mb-6">
+                <div className={`w-24 h-24 flex items-center justify-center rounded-sm border-2 ${pendingItem.rarity === Rarity.LEGENDARY ? 'border-yellow-400 bg-yellow-900/30 animate-pulse' : 'border-slate-500 bg-slate-700'}`}>
+                    <Sword size={48} className={pendingItem.rarity === Rarity.LEGENDARY ? 'text-yellow-400' : 'text-slate-300'} />
                 </div>
-                <div className="overflow-y-auto flex-1 space-y-3 custom-scrollbar pr-1">
-                    {SHOP_ITEMS.filter(item => item.category === shopTab).map(item => {
-                        const cost = getShopItemCost(item.id);
-                        const currency = item.currency || 'gold';
-                        const canAfford = currency === 'gold' ? stats.gold >= cost : stats.souls >= cost;
-                        return (
-                            <div key={item.id} className="bg-slate-900/50 p-2 md:p-3 rounded border border-slate-700 flex justify-between items-center">
-                                <div className="flex gap-3 items-center">
-                                    <div className={`p-2 rounded-full ${item.category === '05ru' ? 'bg-orange-900 text-orange-400' : 'bg-blue-900 text-blue-400'}`}>
-                                        {item.id === 'mystery_box' ? <Box size={16} className="text-purple-400"/> : (item.category === '05ru' ? <Gift size={16}/> : <Zap size={16}/>)}
-                                    </div>
-                                    <div>
-                                        <div className="font-bold text-white text-xs md:text-sm">{item.name}</div>
-                                        <div className="text-[10px] text-slate-400 leading-tight">{item.description}</div>
-                                    </div>
-                                </div>
-                                <button onClick={() => buyShopItem(item.id)} disabled={!canAfford} className={`px-3 py-1 md:px-4 md:py-2 rounded font-bold text-[10px] md:text-xs flex items-center gap-1 ${canAfford ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-500'}`}>
-                                    {cost} {currency === 'gold' ? 'G' : <Ghost size={10} />}
-                                </button>
-                            </div>
-                        );
-                    })}
-                </div>
+            </div>
+
+            <div className="text-center mb-4">
+              <div className="text-lg font-bold text-white mb-1">{pendingItem.name}</div>
+              <div className="text-xs text-slate-400 italic mb-2">"{pendingItem.description}"</div>
+              <div className="inline-block px-2 py-0.5 rounded-sm text-[10px] uppercase font-bold bg-slate-700 text-slate-300">
+                {pendingItem.rarity} | LVL {pendingItem.itemLevel}
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs mb-6 bg-slate-900/50 p-3 rounded-sm">
+                <div className="text-slate-400">Урон:</div>
+                <div className="text-right text-red-400 font-bold">+{pendingItem.damageBonus}</div>
+                {pendingItem.defenseBonus ? (
+                    <>
+                    <div className="text-slate-400">Защита:</div>
+                    <div className="text-right text-blue-400 font-bold">+{pendingItem.defenseBonus}</div>
+                    </>
+                ) : null}
+                <div className="text-slate-400">Золото:</div>
+                <div className="text-right text-yellow-400 font-bold">+{(pendingItem.goldMultiplier * 100).toFixed(0)}%</div>
+            </div>
+
+            <div className="space-y-2">
+                <button 
+                    onClick={() => resolvePendingItem('equip_new')}
+                    className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-sm text-sm shadow-lg transform transition hover:scale-105"
+                >
+                    Экипировать (Продать старое)
+                </button>
+                <button 
+                    onClick={() => resolvePendingItem('keep_old')}
+                    className="w-full bg-red-900/50 hover:bg-red-900 text-red-200 font-bold py-2 rounded-sm text-xs"
+                >
+                    Продать новое
+                </button>
+            </div>
           </div>
+        </div>
       )}
 
       {/* Prestige Modal */}
       {showPrestigeModal && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="bg-slate-800 border-4 border-purple-500 rounded-lg max-w-lg w-full p-6 relative">
-                <button onClick={() => setShowPrestigeModal(false)} className="absolute top-2 right-2 text-slate-400 hover:text-white"><X/></button>
-                <h2 className="text-2xl text-purple-400 font-bold mb-4 flex items-center gap-2"><Ghost /> АЛТАРЬ ДУШ</h2>
-                <div className="flex justify-between items-center mb-6 bg-slate-900 p-4 rounded border border-slate-700">
-                    <div>
-                        <div className="text-slate-400 text-xs">Ваши Души</div>
-                        <div className="text-2xl font-bold text-purple-300 flex items-center gap-2"><Ghost size={20} /> {stats.souls}</div>
-                    </div>
-                    <div className="text-right">
-                        <div className="text-slate-400 text-xs">Душ при сбросе</div>
-                        <div className="text-xl font-bold text-green-400">+{calculatePotentialSouls()}</div>
-                    </div>
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-900 border-2 border-purple-500 p-6 rounded-sm max-w-md w-full relative">
+                <button onClick={() => setShowPrestigeModal(false)} className="absolute top-2 right-2 text-slate-500 hover:text-white"><X size={20}/></button>
+                <div className="text-center mb-6">
+                    <Ghost size={48} className="mx-auto text-purple-500 mb-2"/>
+                    <h2 className="text-2xl font-bold text-purple-400">Перерождение</h2>
+                    <p className="text-slate-400 text-xs mt-2">Сбросьте прогресс (золото, уровни, предметы), чтобы получить ДУШИ.</p>
                 </div>
-                <div className="space-y-4 mb-6">
-                    <div className="flex justify-between items-center bg-slate-700/50 p-3 rounded">
-                        <div><div className="font-bold text-sm">Урон</div><div className="text-[10px] text-slate-400">x{stats.prestigeDamageMult.toFixed(1)}</div></div>
-                        <button onClick={() => buyPrestigeUpgrade('dmg')} disabled={stats.souls < 10} className={`px-3 py-1 rounded text-xs font-bold ${stats.souls >= 10 ? 'bg-purple-600' : 'bg-slate-600 opacity-50'}`}>10 Souls</button>
-                    </div>
-                    <div className="flex justify-between items-center bg-slate-700/50 p-3 rounded">
-                        <div><div className="font-bold text-sm">Золото</div><div className="text-[10px] text-slate-400">x{stats.prestigeGoldMult.toFixed(1)}</div></div>
-                        <button onClick={() => buyPrestigeUpgrade('gold')} disabled={stats.souls < 10} className={`px-3 py-1 rounded text-xs font-bold ${stats.souls >= 10 ? 'bg-purple-600' : 'bg-slate-600 opacity-50'}`}>10 Souls</button>
-                    </div>
+                
+                <div className="bg-slate-800 p-4 rounded-sm mb-6 text-center">
+                    <div className="text-slate-400 text-xs">Вы получите:</div>
+                    <div className="text-3xl font-bold text-purple-400 my-2">{calculatePotentialSouls()}</div>
+                    <div className="text-slate-400 text-xs">Душ</div>
                 </div>
-                <button onClick={performPrestige} disabled={calculatePotentialSouls() === 0} className={`w-full py-3 rounded font-bold text-lg border-2 flex items-center justify-center gap-2 transition-all ${calculatePotentialSouls() > 0 ? 'bg-red-900 border-red-500 hover:bg-red-800 text-white' : 'bg-slate-700 border-slate-600 text-slate-500'}`}>
-                    <Repeat /> ПЕРЕРОДИТЬСЯ
+
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                    <button onClick={() => buyPrestigeUpgrade('dmg')} className="bg-slate-800 p-3 rounded-sm border border-slate-700 hover:border-purple-500 text-left">
+                        <div className="text-xs text-slate-400 mb-1">Урон +50%</div>
+                        <div className="font-bold text-purple-300">10 Душ</div>
+                    </button>
+                    <button onClick={() => buyPrestigeUpgrade('gold')} className="bg-slate-800 p-3 rounded-sm border border-slate-700 hover:border-purple-500 text-left">
+                        <div className="text-xs text-slate-400 mb-1">Золото +50%</div>
+                        <div className="font-bold text-purple-300">10 Душ</div>
+                    </button>
+                </div>
+
+                <button 
+                    onClick={performPrestige}
+                    disabled={calculatePotentialSouls() === 0}
+                    className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-3 rounded-sm shadow-lg"
+                >
+                    СОВЕРШИТЬ РИТУАЛ
                 </button>
             </div>
         </div>
       )}
 
+      {/* Sell Confirmation Modal */}
+      {itemToSell && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+              <div className="bg-slate-800 border border-slate-600 p-6 rounded-sm max-w-sm w-full">
+                  <h3 className="text-lg font-bold mb-4 text-white">Продать предмет?</h3>
+                  <div className="flex items-center gap-3 bg-slate-900 p-3 rounded-sm mb-4">
+                      <div className={`w-10 h-10 bg-slate-800 border ${RARITY_COLORS[itemToSell.rarity].replace('text-', 'border-')} rounded-sm flex items-center justify-center`}>
+                          <Sword size={20} className={RARITY_COLORS[itemToSell.rarity]} />
+                      </div>
+                      <div>
+                          <div className={`text-sm font-bold ${RARITY_COLORS[itemToSell.rarity]}`}>{itemToSell.name}</div>
+                          <div className="text-xs text-yellow-400 font-mono">+{calculateSellPrice(itemToSell)} G</div>
+                      </div>
+                  </div>
+                  <div className="flex gap-3">
+                      <button onClick={confirmSellItem} className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded-sm text-xs">Продать</button>
+                      <button onClick={() => setItemToSell(null)} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-sm text-xs">Отмена</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Loot Box Roulette Modal */}
+      {showLootBoxModal && (
+          <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+             <div className="bg-slate-900 border-2 border-orange-500 rounded-sm max-w-md w-full p-6 relative">
+                 <button onClick={() => setShowLootBoxModal(false)} className="absolute top-2 right-2 text-slate-500 hover:text-white"><X size={20}/></button>
+                 <h2 className="text-center text-xl font-bold text-orange-400 mb-6">Сундук Удачи</h2>
+                 
+                 <div className="h-32 bg-slate-800 mb-6 rounded-sm flex items-center justify-center relative overflow-hidden border-inner shadow-inner">
+                     {isLootBoxSpinning ? (
+                         <div className="text-4xl animate-bounce">🎰</div>
+                     ) : (
+                         <div className="text-center">
+                             {lootBoxReward ? (
+                                 <div className="text-2xl font-bold text-white animate-pulse">{lootBoxReward}</div>
+                             ) : (
+                                 <Box size={48} className="text-orange-600 opacity-50"/>
+                             )}
+                         </div>
+                     )}
+                 </div>
+
+                 <div className="flex gap-2">
+                     <button 
+                        onClick={spinLootBox} 
+                        disabled={stats.lootBoxes <= 0 || isLootBoxSpinning}
+                        className="flex-1 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-700 text-white font-bold py-3 rounded-sm"
+                     >
+                        Открыть (1)
+                     </button>
+                     <button 
+                        onClick={openMassLootBoxes}
+                        disabled={stats.lootBoxes < 2 || isLootBoxSpinning}
+                        className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-700 text-white font-bold py-3 rounded-sm"
+                     >
+                        Открыть (10)
+                     </button>
+                 </div>
+                 <div className="text-center text-xs text-slate-500 mt-2">Доступно: {stats.lootBoxes}</div>
+
+                 {lootBoxSummary && (
+                     <div className="mt-4 max-h-32 overflow-y-auto bg-slate-950 p-2 rounded-sm text-xs text-slate-300">
+                         {lootBoxSummary.map((res, idx) => (
+                             <div key={idx} className="border-b border-slate-800 py-1 last:border-0">{res}</div>
+                         ))}
+                     </div>
+                 )}
+             </div>
+          </div>
+      )}
+
       {/* Achievements Modal */}
       {showAchievementsModal && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-             <div className="bg-slate-800 border-4 border-yellow-500 rounded-lg max-w-4xl w-full p-6 relative h-[80vh] flex flex-col">
-                <button onClick={() => setShowAchievementsModal(false)} className="absolute top-2 right-2 text-slate-400 hover:text-white"><X/></button>
-                <h2 className="text-xl text-yellow-400 font-bold mb-4 flex items-center gap-2 flex-shrink-0"><Trophy /> ЗАЛ СЛАВЫ</h2>
-                <div className="overflow-y-auto flex-1 pr-2 custom-scrollbar">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {ACHIEVEMENTS.map(ach => {
-                            const unlocked = stats.unlockedAchievements.includes(ach.id);
-                            return (
-                                <div key={ach.id} className={`p-4 rounded border flex flex-col gap-2 relative overflow-hidden ${unlocked ? 'bg-gradient-to-br from-yellow-900/40 to-slate-900 border-yellow-600/50' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
-                                    <div className="flex justify-between items-start z-10">
-                                        <div className={`p-2 rounded-full ${unlocked ? 'bg-yellow-500 text-black' : 'bg-slate-700 text-slate-500'}`}>
-                                            {unlocked ? <Trophy size={16} /> : <Lock size={16} />}
-                                        </div>
-                                    </div>
-                                    <div className="z-10">
-                                        <div className={`font-bold text-sm md:text-lg ${unlocked ? 'text-white' : 'text-slate-400'}`}>{ach.name}</div>
-                                        <div className="text-xs text-slate-400 mb-2">{ach.description}</div>
-                                        <div className="text-[10px] font-mono bg-black/30 p-2 rounded flex items-center gap-2">
-                                            <Gift size={10} className={unlocked ? 'text-green-400' : 'text-slate-600'}/> 
-                                            <span className={unlocked ? 'text-green-300' : 'text-slate-500'}>{ach.rewardDescription}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+              <div className="bg-slate-900 border border-slate-600 p-6 rounded-sm max-w-lg w-full max-h-[80vh] flex flex-col">
+                   <div className="flex justify-between items-center mb-4">
+                       <h2 className="text-xl font-bold text-yellow-400 flex items-center gap-2"><Trophy /> Достижения</h2>
+                       <button onClick={() => setShowAchievementsModal(false)}><X className="text-slate-400 hover:text-white"/></button>
+                   </div>
+                   <div className="grid grid-cols-2 gap-3 overflow-y-auto custom-scrollbar pr-2">
+                       {ACHIEVEMENTS.map(ach => {
+                           const isUnlocked = stats.unlockedAchievements.includes(ach.id);
+                           return (
+                               <div key={ach.id} className={`p-3 rounded-sm border ${isUnlocked ? 'bg-slate-800 border-yellow-600/50' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
+                                   <div className="flex items-start gap-2 mb-2">
+                                       <div className={`mt-1 ${isUnlocked ? 'text-yellow-400' : 'text-slate-600'}`}>
+                                           {isUnlocked ? <Trophy size={16}/> : <Lock size={16}/>}
+                                       </div>
+                                       <div>
+                                           <div className={`text-xs font-bold ${isUnlocked ? 'text-white' : 'text-slate-400'}`}>{ach.name}</div>
+                                           <div className="text-[10px] text-slate-500 leading-tight">{ach.description}</div>
+                                       </div>
+                                   </div>
+                                   <div className="text-[10px] font-mono bg-slate-950 p-1 rounded-sm text-center text-slate-300">
+                                       Награда: {ach.rewardDescription}
+                                   </div>
+                               </div>
+                           );
+                       })}
+                   </div>
+              </div>
+          </div>
+      )}
+
+      {/* Map Modal */}
+      {showMapModal && (
+          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+              <div className="bg-slate-900 w-full max-w-2xl rounded-sm border border-slate-700 overflow-hidden flex flex-col max-h-[90vh]">
+                  <div className="p-4 border-b border-slate-800 flex justify-between items-center">
+                      <h2 className="text-xl font-bold text-blue-400 flex items-center gap-2"><MapIcon/> Карта Мира</h2>
+                      <button onClick={() => setShowMapModal(false)}><X className="text-slate-400 hover:text-white"/></button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[url('https://www.transparenttextures.com/patterns/cartographer.png')]">
+                      {ZONES.map((zone, idx) => {
+                          const isLocked = stats.level < zone.minLevel;
+                          const isCurrent = stats.level >= zone.minLevel && stats.level <= zone.maxLevel;
+                          const isPassed = stats.level > zone.maxLevel;
+                          
+                          return (
+                              <div key={zone.id} className={`relative p-4 rounded-sm border-2 transition-all ${isCurrent ? 'bg-slate-800 border-blue-500 scale-105 shadow-xl' : (isLocked ? 'bg-slate-900 border-slate-800 opacity-50 grayscale' : 'bg-slate-800 border-green-900')}`}>
+                                  {isLocked && <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10"><Lock size={32} className="text-slate-500"/></div>}
+                                  <div className="flex justify-between items-start mb-2">
+                                      <h3 className={`font-bold text-lg ${zone.textColor}`}>{zone.name}</h3>
+                                      <span className="text-xs font-mono bg-black/30 px-2 py-1 rounded-sm">LVL {zone.minLevel}-{zone.maxLevel}</span>
+                                  </div>
+                                  <p className="text-xs text-slate-400 mb-3">{zone.description}</p>
+                                  {isCurrent && <div className="inline-block bg-blue-600 text-white text-[10px] px-2 py-1 rounded-sm font-bold animate-pulse">ТЕКУЩАЯ ЦЕЛЬ</div>}
+                                  {isPassed && <div className="inline-block bg-green-900 text-green-300 text-[10px] px-2 py-1 rounded-sm font-bold flex items-center gap-1"><CheckCircle size={10}/> ПРОЙДЕНО</div>}
+                              </div>
+                          )
+                      })}
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Story Modal */}
+      {showStoryModal && (
+        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-6">
+            <div className="max-w-lg w-full text-center">
+                <div className="mb-6 text-6xl opacity-20"><MapIcon /></div>
+                <h1 className={`text-3xl font-bold mb-4 ${currentZone.textColor}`}>{currentZone.name}</h1>
+                <p className="text-slate-300 mb-8 leading-relaxed border-l-4 border-slate-700 pl-4 text-left">{currentZone.description}</p>
+                <div className="text-sm font-mono text-yellow-500 mb-8">ЦЕЛЬ: {currentZone.mission}</div>
+                
+                {currentZone.choices && (
+                    <div className="grid gap-3">
+                        {currentZone.choices.map((choice, idx) => (
+                            <button 
+                                key={idx}
+                                onClick={() => handleStoryChoice(choice)}
+                                className="bg-slate-800 hover:bg-slate-700 p-4 rounded-sm border border-slate-600 text-left hover:border-white transition-colors group"
+                            >
+                                <div className="text-sm font-bold text-white group-hover:text-yellow-300 mb-1">{choice.text}</div>
+                                <div className="text-xs text-slate-500">Награда: {choice.rewardType === 'gold' ? 'Золото' : 'Бафф'}</div>
+                            </button>
+                        ))}
                     </div>
-                </div>
-             </div>
+                )}
+                {!currentZone.choices && (
+                    <button onClick={() => {setShowStoryModal(false); setIsGamePaused(false); playBackgroundMusic(currentZone.id);}} className="bg-white text-black px-8 py-3 rounded-sm font-bold hover:scale-105 transition">НАЧАТЬ ПУТЬ</button>
+                )}
+            </div>
+        </div>
+      )}
+
+      {/* NPC Modal */}
+      {showNPCModal && activeNPC && (
+          <div className="fixed inset-0 bg-black/80 z-50 flex items-end md:items-center justify-center p-0 md:p-6">
+              <div className="bg-slate-900 w-full md:max-w-2xl h-[50vh] md:h-auto rounded-t-sm md:rounded-sm border-t-2 md:border-2 border-slate-600 flex flex-col overflow-hidden relative">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white to-transparent opacity-20"></div>
+                  
+                  <div className="flex-1 p-6 flex flex-col">
+                       <div className="flex items-center gap-4 mb-6">
+                           <div className="w-16 h-16 bg-slate-800 rounded-sm border-2 border-slate-500 flex items-center justify-center">
+                               <Tent size={32} className="text-slate-400"/>
+                           </div>
+                           <div>
+                               <h2 className="text-xl font-bold text-white">{activeNPC.name}</h2>
+                               <p className="text-xs text-slate-400">{activeNPC.title}</p>
+                           </div>
+                       </div>
+
+                       <div className="flex-1 bg-slate-800/50 p-4 rounded-sm border border-slate-700 mb-4 overflow-y-auto">
+                           <p className="text-sm text-slate-200 leading-relaxed italic">"{activeNPC.dialogues[npcDialogId].text}"</p>
+                       </div>
+
+                       <div className="grid gap-2">
+                           {activeNPC.dialogues[npcDialogId].options.map((opt, idx) => (
+                               <button 
+                                  key={idx} 
+                                  onClick={() => handleNPCAction(opt)}
+                                  className="bg-slate-800 hover:bg-slate-700 p-3 rounded-sm text-left text-sm border border-slate-600 hover:border-white transition-colors flex justify-between items-center"
+                               >
+                                   <span>{opt.text}</span>
+                                   {opt.action === 'trade' && <span className="text-[10px] text-yellow-500 uppercase font-bold">Торговля</span>}
+                                   {opt.action === 'exit' && <ArrowRight size={14} className="text-slate-500"/>}
+                               </button>
+                           ))}
+                       </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Tutorial */}
+      {showTutorial && (
+          <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-6 text-center">
+              <div className="max-w-md w-full">
+                  <h1 className="text-3xl font-bold text-yellow-400 mb-4">Pixel Loot Lord</h1>
+                  <p className="text-slate-300 mb-8">Добро пожаловать в мир, созданный из пикселей и управляемый ИИ. Твоя задача проста: кликай, убивай, собирай лут.</p>
+                  
+                  <div className="space-y-4 text-left bg-slate-800 p-6 rounded-sm mb-8 text-sm">
+                      <div className="flex gap-3"><Sword className="text-red-400 shrink-0"/> <span>Убивай монстров, чтобы получать Золото.</span></div>
+                      <div className="flex gap-3"><Grid className="text-blue-400 shrink-0"/> <span>Покупай улучшения и открывай новые зоны.</span></div>
+                      <div className="flex gap-3"><Crown className="text-yellow-400 shrink-0"/> <span>Находи Легендарные предметы, созданные ИИ.</span></div>
+                  </div>
+                  
+                  <button onClick={completeTutorial} className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-sm font-bold text-white animate-pulse">НАЧАТЬ ИГРУ</button>
+              </div>
+          </div>
+      )}
+
+      {/* Boss Intro */}
+      {showBossIntro && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 animate-in fade-in duration-500">
+           <div className="text-center">
+               <div className="text-red-600 font-bold text-6xl mb-2 animate-pulse">⚠ БОСС ⚠</div>
+               <h2 className="text-4xl text-white font-bold mb-4">{monster.name}</h2>
+               {BOSS_INFO[monster.name] && (
+                   <div className="max-w-md mx-auto bg-slate-900 border border-red-900 p-4 rounded-sm mb-8">
+                       <p className="text-slate-300 italic mb-2">"{BOSS_INFO[monster.name].lore}"</p>
+                       <p className="text-red-400 text-xs font-mono uppercase">Слабость: {BOSS_INFO[monster.name].mechanics}</p>
+                   </div>
+               )}
+               <button onClick={startBossFight} className="bg-red-600 hover:bg-red-500 text-white px-8 py-4 rounded-sm text-xl font-bold shadow-[0_0_20px_rgba(220,38,38,0.5)]">В БОЙ!</button>
+           </div>
         </div>
       )}
 
