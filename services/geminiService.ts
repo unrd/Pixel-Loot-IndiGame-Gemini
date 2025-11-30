@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Item, Rarity, ItemType } from "../types";
 
@@ -41,7 +40,12 @@ export const generateItemDetails = async (level: number, itemType: ItemType, rar
       }
     });
 
-    const json = JSON.parse(response.text);
+    const responseText = response.text;
+    if (!responseText) {
+        throw new Error("No text returned from Gemini");
+    }
+
+    const json = JSON.parse(responseText);
     return {
       name: json.name,
       description: json.description

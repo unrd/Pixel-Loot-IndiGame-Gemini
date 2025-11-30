@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Coins, Zap, Sword, Crown, Sparkles, Skull, Ghost, Repeat, Trophy, Lock, CheckCircle, Save, ShoppingBag, Gift, Shirt, X, Info, ArrowRight, Map as MapIcon, ArrowUpCircle, Trash2, Volume2, VolumeX, List, Grid, Menu, Box, Tent, History } from 'lucide-react';
 import { Item, Rarity, Monster, PlayerStats, FloatingText, ItemType, Buffs, Zone, StoryChoice, NPC, NPCId, DialogOption } from './types';
@@ -641,11 +640,11 @@ export default function App() {
 
       if (item.type.startsWith('consumable')) {
           const now = Date.now();
-          if (item.id === 'potion_damage') setBuffs(prev => ({...prev, damageBuffExpiry: Math.max(now, prev.damageBuffExpiry) + (item.duration || 0)}));
-          else if (item.id === 'potion_gold') setBuffs(prev => ({...prev, goldBuffExpiry: Math.max(now, prev.goldBuffExpiry) + (item.duration || 0)}));
+          if (item.id === 'potion_damage') setBuffs((prev: Buffs) => ({...prev, damageBuffExpiry: Math.max(now, prev.damageBuffExpiry) + (item.duration || 0)}));
+          else if (item.id === 'potion_gold') setBuffs((prev: Buffs) => ({...prev, goldBuffExpiry: Math.max(now, prev.goldBuffExpiry) + (item.duration || 0)}));
       } else if (item.type.startsWith('permanent')) {
-          if (item.id === 'perm_crit_chance') setStats(prev => ({...prev, critChance: prev.critChance + (item.value || 0)}));
-          else if (item.id === 'perm_crit_damage') setStats(prev => ({...prev, critMultiplier: prev.critMultiplier + (item.value || 0)}));
+          if (item.id === 'perm_crit_chance') setStats((prev: PlayerStats) => ({...prev, critChance: prev.critChance + (item.value || 0)}));
+          else if (item.id === 'perm_crit_damage') setStats((prev: PlayerStats) => ({...prev, critMultiplier: prev.critMultiplier + (item.value || 0)}));
       }
   };
 
